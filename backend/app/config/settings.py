@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     # Must equal the version at the top of context/API_CONTRACT.md — asserted on the
     # frontend at boot (`GET /meta/enums`).
-    contract_version: str = "v1.1.0"
+    contract_version: str = "v1.3.0"
     host: str = "0.0.0.0"
     port: int = 8001
 

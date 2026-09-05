@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Boxes, ChevronLeft, ChevronRight, MoreHorizontal, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight, MoreHorizontal, Plus } from "lucide-react";
 
 import { getErrorMessage } from "@/lib/api-client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,15 +24,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/features/auth/auth-context";
 import type { WarehouseRead } from "@/lib/api/types";
 import { WarehouseFormDialog } from "@/features/warehouses/components/warehouse-form-dialog";
-import { WarehouseStockDialog } from "@/features/warehouses/components/warehouse-stock-dialog";
 import { useDeleteWarehouse, useWarehouses } from "@/features/warehouses/hooks";
 
 const PAGE_SIZE = 10;
 
 export function WarehousesTable() {
+  const router = useRouter();
   const { hasPermission } = useAuth();
   const canWrite = hasPermission("warehouses:write");
 
@@ -39,10 +41,11 @@ export function WarehousesTable() {
   const [formOpen, setFormOpen] = React.useState(false);
   const [editingWarehouse, setEditingWarehouse] = React.useState<WarehouseRead | null>(null);
   const [deletingWarehouse, setDeletingWarehouse] = React.useState<WarehouseRead | null>(null);
-  const [stockWarehouse, setStockWarehouse] = React.useState<WarehouseRead | null>(null);
 
   const { data, isLoading, isError, error } = useWarehouses({ page, page_size: PAGE_SIZE });
   const deleteWarehouse = useDeleteWarehouse();
+
+  const openStock = (warehouse: WarehouseRead) => router.push(`/config/warehouses/${warehouse.id}`);
 
   const openCreate = () => {
     setEditingWarehouse(null);
@@ -64,6 +67,7 @@ export function WarehousesTable() {
   }
 
   return (
+    <TooltipProvider>
     <div className="space-y-4">
       <div className="flex items-center justify-end">
         {canWrite && (
@@ -99,53 +103,55 @@ export function WarehousesTable() {
               ))
             ) : data && data.items.length > 0 ? (
               data.items.map((warehouse) => (
-                <TableRow key={warehouse.id}>
-                  <TableCell>
-                    <p className="font-medium">{warehouse.name}</p>
-                    {warehouse.address && (
-                      <p className="text-xs text-muted-foreground">{warehouse.address}</p>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{warehouse.code}</TableCell>
-                  <TableCell className="tabular-nums">{warehouse.shipping_cost_weight}</TableCell>
-                  <TableCell className="tabular-nums">
-                    {warehouse.replenishment_threshold}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={warehouse.is_active ? "positive" : "outline"}>
-                      {warehouse.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreHorizontal />
-                          <span className="sr-only">Open actions</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setStockWarehouse(warehouse)}>
-                          <Boxes />
-                          View stock
-                        </DropdownMenuItem>
-                        {canWrite && (
-                          <>
-                            <DropdownMenuItem onClick={() => openEdit(warehouse)}>
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => setDeletingWarehouse(warehouse)}
-                            >
-                              Delete
-                            </DropdownMenuItem>
-                          </>
+                <Tooltip key={warehouse.id} delayDuration={400}>
+                  <TooltipTrigger asChild>
+                    <TableRow
+                      className="cursor-pointer"
+                      onClick={() => openStock(warehouse)}
+                    >
+                      <TableCell>
+                        <p className="font-medium">{warehouse.name}</p>
+                        {warehouse.address && (
+                          <p className="text-xs text-muted-foreground">{warehouse.address}</p>
                         )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{warehouse.code}</TableCell>
+                      <TableCell className="tabular-nums">{warehouse.shipping_cost_weight}</TableCell>
+                      <TableCell className="tabular-nums">
+                        {warehouse.replenishment_threshold}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={warehouse.is_active ? "positive" : "outline"}>
+                          {warehouse.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {canWrite && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
+                              <Button variant="ghost" size="icon">
+                                <MoreHorizontal />
+                                <span className="sr-only">Open actions</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEdit(warehouse)}>
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setDeletingWarehouse(warehouse)}
+                              >
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  </TooltipTrigger>
+                  <TooltipContent>View stocks</TooltipContent>
+                </Tooltip>
               ))
             ) : (
               <TableRow>
@@ -187,7 +193,6 @@ export function WarehousesTable() {
       )}
 
       <WarehouseFormDialog open={formOpen} onOpenChange={setFormOpen} warehouse={editingWarehouse} />
-      <WarehouseStockDialog warehouse={stockWarehouse} onClose={() => setStockWarehouse(null)} />
       <ConfirmDeleteDialog
         open={Boolean(deletingWarehouse)}
         onOpenChange={(open) => !open && setDeletingWarehouse(null)}
@@ -202,5 +207,6 @@ export function WarehousesTable() {
         isPending={deleteWarehouse.isPending}
       />
     </div>
+    </TooltipProvider>
   );
 }

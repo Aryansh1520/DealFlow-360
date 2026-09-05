@@ -1,13 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Search } from "lucide-react";
+import { ChevronDown, Plus, Search } from "lucide-react";
 
 import { getErrorMessage } from "@/lib/api-client";
 import { useDebounce } from "@/lib/use-debounce";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -20,8 +24,10 @@ import {
 } from "@/components/ui/table";
 import { useAuth } from "@/features/auth/auth-context";
 import type { Role } from "@/features/auth/types";
+import { useEnums } from "@/features/meta/hooks";
 import { useRoles } from "@/features/roles/hooks";
 import { DeleteRoleDialog } from "@/features/roles/components/delete-role-dialog";
+import { PermissionSummaryTable } from "@/features/roles/components/permission-summary-table";
 import { RoleFormDialog } from "@/features/roles/components/role-form-dialog";
 
 export function RolesTable() {
@@ -107,17 +113,7 @@ export function RolesTable() {
                     {role.description || "—"}
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {role.permissions.length > 0 ? (
-                        role.permissions.map((permission) => (
-                          <Badge key={permission} variant="secondary">
-                            {permission}
-                          </Badge>
-                        ))
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </div>
+                    <PermissionsCell role={role} />
                   </TableCell>
                   {canWrite && (
                     <TableCell>
@@ -152,5 +148,43 @@ export function RolesTable() {
       <RoleFormDialog open={formOpen} onOpenChange={setFormOpen} role={editingRole} />
       <DeleteRoleDialog role={deletingRole} onClose={() => setDeletingRole(null)} />
     </div>
+  );
+}
+
+/** Click-to-toggle summary — replaces a wall of raw `quotations:write`-style
+ * badges. Collapsed state is just a count (or "Full access" for `*`); opening
+ * it shows the same resource × action table `PermissionGrid` edits from,
+ * read-only, so a role's permissions always read the same way whether you're
+ * viewing or editing them. */
+function PermissionsCell({ role }: { role: Role }) {
+  const { data: enums } = useEnums();
+  const resources = enums?.permission_resources ?? [];
+  const wildcard = role.permissions.includes("*");
+
+  if (role.permissions.length === 0) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-1 text-xs font-medium transition-colors hover:bg-muted"
+        >
+          {wildcard ? "Full access" : `${role.permissions.length} permission${role.permissions.length === 1 ? "" : "s"}`}
+          <ChevronDown className="h-3 w-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-auto p-3">
+        {wildcard ? (
+          <p className="max-w-56 text-sm text-muted-foreground">
+            This role has full access — every resource and action.
+          </p>
+        ) : (
+          <PermissionSummaryTable resources={resources} granted={role.permissions} />
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

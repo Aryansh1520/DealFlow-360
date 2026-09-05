@@ -41,15 +41,24 @@ AFFINITY_BUNDLES: list[tuple[str, ...]] = [
 
 logger = logging.getLogger(__name__)
 
-ADMIN_ROLE = "admin"
-DEFAULT_USER_ROLE = "user"
+# Human-readable role names — these are what an admin sees on the Roles screen,
+# not an internal code. Nothing outside this module matches on the string value
+# (RBAC checks are all against `role.permissions`, never `role.name`), so these
+# are free to read naturally; only the constants below need to stay in sync with
+# `DEFAULT_ROLES` / `DEMO_USERS`.
+ADMIN_ROLE = "Administrator"
+DEFAULT_USER_ROLE = "Standard User"
+SALES_REP_ROLE = "Sales Rep"
+SALES_MANAGER_ROLE = "Sales Manager"
+FINANCE_ROLE = "Finance"
+OPS_ROLE = "Operations"
 
-# Permission strings from API_CONTRACT.md §5.
+# Permission strings from API_CONTRACT.md §5 / app/core/permissions.py.
 DEFAULT_ROLES = [
     {"name": ADMIN_ROLE, "description": "Full access", "permissions": ["*"]},
     {"name": DEFAULT_USER_ROLE, "description": "Standard user", "permissions": []},
     {
-        "name": "sales_rep",
+        "name": SALES_REP_ROLE,
         "description": "Builds and owns quotations",
         "permissions": [
             "catalog:read",
@@ -60,7 +69,7 @@ DEFAULT_ROLES = [
         ],
     },
     {
-        "name": "sales_manager",
+        "name": SALES_MANAGER_ROLE,
         "description": "L1 approver; manages catalogue pricing",
         "permissions": [
             "catalog:read",
@@ -78,7 +87,7 @@ DEFAULT_ROLES = [
         ],
     },
     {
-        "name": "finance",
+        "name": FINANCE_ROLE,
         "description": "L2 approver; owns policy, subscriptions and billing",
         "permissions": [
             "policies:read",
@@ -94,7 +103,7 @@ DEFAULT_ROLES = [
         ],
     },
     {
-        "name": "ops",
+        "name": OPS_ROLE,
         "description": "Owns warehouses and fulfilment",
         "permissions": ["warehouses:read", "warehouses:write", "fulfillment:read", "fulfillment:write"],
     },
@@ -103,10 +112,10 @@ DEFAULT_ROLES = [
 # Demo-only credentials, one per seeded role.
 DEMO_PASSWORD = "demo12345"
 DEMO_USERS = [
-    {"email": "rep@example.com", "full_name": "Riya Rep", "role": "sales_rep"},
-    {"email": "manager@example.com", "full_name": "Manav Manager", "role": "sales_manager"},
-    {"email": "finance@example.com", "full_name": "Farah Finance", "role": "finance"},
-    {"email": "ops@example.com", "full_name": "Om Ops", "role": "ops"},
+    {"email": "rep@example.com", "full_name": "Riya Rep", "role": SALES_REP_ROLE},
+    {"email": "manager@example.com", "full_name": "Manav Manager", "role": SALES_MANAGER_ROLE},
+    {"email": "finance@example.com", "full_name": "Farah Finance", "role": FINANCE_ROLE},
+    {"email": "ops@example.com", "full_name": "Om Ops", "role": OPS_ROLE},
 ]
 
 DEMO_CUSTOMER_EMAIL = "customer@example.com"

@@ -37,6 +37,7 @@ import { useAuth } from "@/features/auth/auth-context";
 import type { ProductRead } from "@/lib/api/types";
 import { ProductFormDialog } from "@/features/catalog/components/product-form-dialog";
 import { useCategories, useDeleteProduct, useProducts } from "@/features/catalog/hooks";
+import { useAllSubscriptionPlans } from "@/features/subscriptions/hooks";
 
 const PAGE_SIZE = 10;
 const ALL = "all";
@@ -56,6 +57,9 @@ export function ProductsTable() {
   const [deletingProduct, setDeletingProduct] = React.useState<ProductRead | null>(null);
 
   const { data: categoriesPage } = useCategories();
+  const { data: plansPage } = useAllSubscriptionPlans();
+  const planInterval = (planId: number | null) =>
+    plansPage?.items.find((plan) => plan.id === planId)?.interval ?? null;
   const { data, isLoading, isError, error } = useProducts({
     page,
     page_size: PAGE_SIZE,
@@ -89,7 +93,7 @@ export function ProductsTable() {
     );
   }
 
-  const columnCount = 4 + (canSeeCost ? 1 : 0) + (canWrite ? 1 : 0);
+  const columnCount = 5 + (canSeeCost ? 1 : 0) + (canWrite ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -133,6 +137,7 @@ export function ProductsTable() {
               <TableHead>Product</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead className="text-right">List price</TableHead>
               {canSeeCost && <TableHead className="text-right">Cost price</TableHead>}
               {canWrite && <TableHead className="w-[50px]" />}
@@ -162,12 +167,22 @@ export function ProductsTable() {
                   </TableCell>
                   <TableCell>{product.category_name}</TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <Badge variant="secondary" className="capitalize">
                         {product.line_type.replace("_", " ")}
                       </Badge>
+                      {product.line_type === "subscription" && (
+                        <Badge variant="outline" className="capitalize">
+                          {planInterval(product.subscription_plan_id) ?? "No plan"}
+                        </Badge>
+                      )}
                       {product.is_promoted && <Badge variant="info">Promoted</Badge>}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={product.is_active ? "positive" : "outline"}>
+                      {product.is_active ? "Active" : "Inactive"}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <Money minor={product.list_price_minor} currency={product.currency} />

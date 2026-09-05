@@ -12,6 +12,7 @@ type S = components["schemas"];
 
 // ---- Meta / enums ---------------------------------------------------------------
 export type MetaEnums = S["MetaEnums"];
+export type PermissionResourceRead = S["PermissionResourceRead"];
 
 // ---- Catalogue --------------------------------------------------------------------
 export type CategoryRead = S["CategoryRead"];

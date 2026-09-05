@@ -1,6 +1,16 @@
 from pydantic import BaseModel
 
 
+class PermissionResourceRead(BaseModel):
+    """One row of the roles screen's permission grid. `actions` is not always
+    read/write — e.g. `approvals` -> `["l1", "l2"]`, `reports` -> `["read", "export"]`.
+    See `app/core/permissions.py`, the single source of truth this is built from."""
+
+    resource: str
+    label: str
+    actions: list[str]
+
+
 class MetaEnums(BaseModel):
     """`GET /meta/enums` — see `API_CONTRACT.md` §2. The frontend fetches this once on
     boot and renders every badge, filter and action button from it; it never hardcodes
@@ -21,6 +31,7 @@ class MetaEnums(BaseModel):
     alert_type: list[str]
     transitions: dict[str, list[str]]
     labels: dict[str, dict[str, str]]
+    permission_resources: list[PermissionResourceRead]
 
 
 class HealthStatus(BaseModel):

@@ -92,12 +92,22 @@ export function PriceListsPanel() {
             ))
           ) : data && data.items.length > 0 ? (
             data.items.map((list) => (
-              <button
+              // A `<div role="button">`, not a real `<button>` — it contains the
+              // dropdown's own `<Button>` trigger, and a <button> can't legally
+              // contain another <button> (React warns and hydration breaks).
+              <div
                 key={list.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedId(list.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedId(list.id);
+                  }
+                }}
                 className={cn(
-                  "flex w-full flex-col gap-1 rounded-md p-2.5 text-left transition-colors",
+                  "flex w-full cursor-pointer flex-col gap-1 rounded-md p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   selectedId === list.id ? "bg-accent" : "hover:bg-accent/50"
                 )}
               >
@@ -138,7 +148,7 @@ export function PriceListsPanel() {
                   </Badge>
                   <span className="text-xs text-muted-foreground">{list.currency}</span>
                 </div>
-              </button>
+              </div>
             ))
           ) : (
             <p className="p-4 text-center text-sm text-muted-foreground">No price lists yet.</p>

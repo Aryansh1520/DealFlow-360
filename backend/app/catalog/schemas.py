@@ -102,6 +102,7 @@ class ProductRead(BaseModel):
     line_type: LineType
     subscription_plan_id: int | None
     currency: str
+    is_active: bool
     variants: list[ProductVariantRead]
     created_at: datetime
     updated_at: datetime
@@ -123,6 +124,7 @@ class ProductRead(BaseModel):
             line_type=product.line_type,
             subscription_plan_id=product.subscription_plan_id,
             currency=product.currency,
+            is_active=product.is_active,
             variants=list(product.variants),
             created_at=product.created_at,
             updated_at=product.updated_at,

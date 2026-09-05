@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 from app.config.settings import settings
 from app.core.deps import CurrentPrincipal
 from app.core.enums import QUOTE_TRANSITIONS, enum_labels, enum_values
+from app.core.permissions import PERMISSION_RESOURCES
 from app.core.responses import SuccessResponse, ok
 from app.db.session import get_db
-from app.meta.schemas import HealthStatus, MetaEnums
+from app.meta.schemas import HealthStatus, MetaEnums, PermissionResourceRead
 
 router = APIRouter()
 
@@ -35,6 +36,10 @@ def get_enums(principal: CurrentPrincipal):
         alert_type=enum_values("alert_type"),
         transitions=QUOTE_TRANSITIONS,
         labels=enum_labels(),
+        permission_resources=[
+            PermissionResourceRead(resource=r.resource, label=r.label, actions=list(r.actions))
+            for r in PERMISSION_RESOURCES
+        ],
     )
     return ok(payload, "Enums retrieved successfully.")
 

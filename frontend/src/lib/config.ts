@@ -5,4 +5,4 @@ export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "DealFlow360";
 
 /** Must equal the version at the top of `context/API_CONTRACT.md`. Asserted
  * against `GET /meta/enums`'s `contract_version` on boot — see `useEnums()`. */
-export const EXPECTED_CONTRACT_VERSION = "v1.1.0";
+export const EXPECTED_CONTRACT_VERSION = "v1.3.0";

@@ -18,7 +18,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -26,13 +25,14 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import type { Role } from "@/features/auth/types";
+import { useEnums } from "@/features/meta/hooks";
+import { PermissionGrid } from "@/features/roles/components/permission-grid";
 import { useCreateRole, useUpdateRole } from "@/features/roles/hooks";
 
 const roleSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().max(255).optional(),
-  // Comma-separated permission strings, e.g. "users:read, users:write"
-  permissions: z.string(),
+  permissions: z.array(z.string()),
 });
 
 type RoleValues = z.infer<typeof roleSchema>;
@@ -48,10 +48,12 @@ export function RoleFormDialog({ open, onOpenChange, role }: RoleFormDialogProps
   const isEdit = Boolean(role);
   const createRole = useCreateRole();
   const updateRole = useUpdateRole();
+  const { data: enums } = useEnums();
+  const resources = enums?.permission_resources ?? [];
 
   const form = useForm<RoleValues>({
     resolver: zodResolver(roleSchema),
-    defaultValues: { name: "", description: "", permissions: "" },
+    defaultValues: { name: "", description: "", permissions: [] },
   });
 
   React.useEffect(() => {
@@ -59,7 +61,7 @@ export function RoleFormDialog({ open, onOpenChange, role }: RoleFormDialogProps
       form.reset({
         name: role?.name ?? "",
         description: role?.description ?? "",
-        permissions: role?.permissions.join(", ") ?? "",
+        permissions: role?.permissions ?? [],
       });
     }
   }, [open, role, form]);
@@ -68,10 +70,7 @@ export function RoleFormDialog({ open, onOpenChange, role }: RoleFormDialogProps
     const payload = {
       name: values.name,
       description: values.description || null,
-      permissions: values.permissions
-        .split(",")
-        .map((permission) => permission.trim())
-        .filter(Boolean),
+      permissions: values.permissions,
     };
 
     if (isEdit && role) {
@@ -86,7 +85,7 @@ export function RoleFormDialog({ open, onOpenChange, role }: RoleFormDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit role" : "New role"}</DialogTitle>
           <DialogDescription>
@@ -128,11 +127,8 @@ export function RoleFormDialog({ open, onOpenChange, role }: RoleFormDialogProps
                 <FormItem>
                   <FormLabel>Permissions</FormLabel>
                   <FormControl>
-                    <Input placeholder="users:read, users:write" {...field} />
+                    <PermissionGrid resources={resources} value={field.value} onChange={field.onChange} />
                   </FormControl>
-                  <FormDescription>
-                    Comma-separated permission strings. Use <code>*</code> to grant everything.
-                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

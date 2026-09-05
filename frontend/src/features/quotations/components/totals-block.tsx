@@ -14,12 +14,13 @@ interface TotalsBlockProps {
   computation: QuoteComputation | null;
   isFetching: boolean;
   onOpenTrace: () => void;
+  className?: string;
 }
 
 /** Gross → discount → net → tax → total, margin bar, risk chip, approval
  * preview. `FRONTEND_PHASE_2.md` Task 2d: "the rep knows before submitting,
  * not after" — every number is `computation`, nothing computed here. */
-export function TotalsBlock({ computation, isFetching, onOpenTrace }: TotalsBlockProps) {
+export function TotalsBlock({ computation, isFetching, onOpenTrace, className }: TotalsBlockProps) {
   // Task 3: "the margin bar must visibly move" — flash briefly whenever the
   // total actually changes (e.g. an upsell lands), not on every re-render.
   const [flash, setFlash] = React.useState(false);
@@ -37,7 +38,12 @@ export function TotalsBlock({ computation, isFetching, onOpenTrace }: TotalsBloc
 
   if (!computation) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+      <div
+        className={cn(
+          "flex h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground",
+          className
+        )}
+      >
         Add a line to see live totals.
       </div>
     );
@@ -60,9 +66,10 @@ export function TotalsBlock({ computation, isFetching, onOpenTrace }: TotalsBloc
   return (
     <div
       className={cn(
-        "space-y-4 rounded-lg border bg-card p-4 shadow-sm transition-all duration-300",
+        "space-y-4 overflow-y-auto rounded-lg border bg-card p-4 shadow-sm transition-all duration-300",
         isFetching && "opacity-70",
-        flash && "ring-2 ring-info"
+        flash && "ring-2 ring-info",
+        className
       )}
     >
       {isFetching && <div className="h-0.5 w-full animate-pulse rounded-full bg-primary/40" />}

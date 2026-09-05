@@ -62,6 +62,9 @@ export function useAddLine(id: number) {
     onSuccess: (quotation) => {
       queryClient.setQueryData([QUOTATIONS_KEY, id], quotation);
       queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "events"] });
+      // Suggestions are scored against the current cart (excludes what's already
+      // on it, margin-deltas computed relative to it) — stale the moment a line changes.
+      queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "suggestions"] });
     },
     onError: (error) => {
       if (!onVersionConflict(queryClient, id, error)) toast.error(getErrorMessage(error));
@@ -77,6 +80,7 @@ export function useUpdateLine(id: number) {
     onSuccess: (quotation) => {
       queryClient.setQueryData([QUOTATIONS_KEY, id], quotation);
       queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "events"] });
+      queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "suggestions"] });
     },
     onError: (error) => {
       if (!onVersionConflict(queryClient, id, error)) toast.error(getErrorMessage(error));
@@ -92,6 +96,7 @@ export function useRemoveLine(id: number) {
     onSuccess: (quotation) => {
       queryClient.setQueryData([QUOTATIONS_KEY, id], quotation);
       queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "events"] });
+      queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "suggestions"] });
     },
     onError: (error) => {
       if (!onVersionConflict(queryClient, id, error)) toast.error(getErrorMessage(error));

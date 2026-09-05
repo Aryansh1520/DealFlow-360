@@ -4,22 +4,20 @@ import { Info } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-/** A labelled field with a one-line explanation in the approver's own
- * vocabulary — `FRONTEND_PHASE_1.md` Task 7: "the approver-facing vocabulary
- * matters." Pulled from `DECISION_ENGINE.md` §2/§3.
- *
- * `tooltip` is a longer, example-driven explanation surfaced on hover/focus of
- * the (i) icon — for readers who want the "so what does changing this do"
- * version, not just the one-line caption. Falls back to `help` when omitted. */
+/** A labelled field with its explanation surfaced entirely via the (i) icon's
+ * hover/focus tooltip — `FRONTEND_PHASE_1.md` Task 7: "the approver-facing
+ * vocabulary matters." Pulled from `DECISION_ENGINE.md` §2/§3, and shared
+ * verbatim from `field-copy.ts` between `PolicyForm` (editable) and
+ * `PolicyView` (read-only) so the two modes never say something different
+ * about the same field. There's no separate helper-text line below the
+ * field — the tooltip is the one explanation, in both modes. */
 export function FieldHelp({
   label,
-  help,
   tooltip,
   children,
 }: {
   label: string;
-  help: string;
-  tooltip?: string;
+  tooltip: string;
   children: ReactNode;
 }) {
   return (
@@ -36,11 +34,10 @@ export function FieldHelp({
               <Info className="h-3.5 w-3.5" />
             </button>
           </TooltipTrigger>
-          <TooltipContent>{tooltip ?? help}</TooltipContent>
+          <TooltipContent>{tooltip}</TooltipContent>
         </Tooltip>
       </div>
       {children}
-      <p className="text-xs text-muted-foreground">{help}</p>
     </div>
   );
 }

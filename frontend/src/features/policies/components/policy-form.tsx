@@ -289,7 +289,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <FieldHelp label="Blended overage weight" help="Revenue-weighted average overage across all lines." tooltip={T.w_blended_bps}>
+            <FieldHelp label="Blended overage weight" tooltip={T.w_blended_bps}>
               <FormField
                 control={form.control}
                 name="w_blended_bps"
@@ -303,7 +303,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Worst-line weight" help="The single worst overage on any one line." tooltip={T.w_worst_bps}>
+            <FieldHelp label="Worst-line weight" tooltip={T.w_worst_bps}>
               <FormField
                 control={form.control}
                 name="w_worst_bps"
@@ -317,7 +317,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Order value weight" help="Larger orders carry more scrutiny, up to the value reference." tooltip={T.w_value_bps}>
+            <FieldHelp label="Order value weight" tooltip={T.w_value_bps}>
               <FormField
                 control={form.control}
                 name="w_value_bps"
@@ -331,7 +331,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Margin shortfall weight" help="How far lines fall below their category's margin floor." tooltip={T.w_margin_bps}>
+            <FieldHelp label="Margin shortfall weight" tooltip={T.w_margin_bps}>
               <FormField
                 control={form.control}
                 name="w_margin_bps"
@@ -345,7 +345,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Overage scale" help="Points of overage that alone max out a component (default 10.0%)." tooltip={T.scale_overage_bps}>
+            <FieldHelp label="Overage scale" tooltip={T.scale_overage_bps}>
               <FormField
                 control={form.control}
                 name="scale_overage_bps"
@@ -359,7 +359,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Value reference" help="Order size treated as 100% of the value factor." tooltip={T.value_reference_minor}>
+            <FieldHelp label="Value reference" tooltip={T.value_reference_minor}>
               <FormField
                 control={form.control}
                 name="value_reference_minor"
@@ -373,7 +373,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Margin scale" help="Margin shortfall (bps) that alone maxes out the margin factor." tooltip={T.margin_scale_bps}>
+            <FieldHelp label="Margin scale" tooltip={T.margin_scale_bps}>
               <FormField
                 control={form.control}
                 name="margin_scale_bps"
@@ -398,7 +398,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <FieldHelp label="L1 required at" help="Score at or above this needs Sales Manager approval." tooltip={T.t1_l1_required}>
+            <FieldHelp label="L1 required at" tooltip={T.t1_l1_required}>
               <FormField
                 control={form.control}
                 name="t1_l1_required"
@@ -412,7 +412,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="L2 required at" help="Score at or above this also needs Finance approval." tooltip={T.t2_l2_required}>
+            <FieldHelp label="L2 required at" tooltip={T.t2_l2_required}>
               <FormField
                 control={form.control}
                 name="t2_l2_required"
@@ -426,7 +426,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Hard breach" help="Overage past a line's own ceiling that forces a minimum L1, regardless of score." tooltip={T.hard_breach_bps}>
+            <FieldHelp label="Hard breach" tooltip={T.hard_breach_bps}>
               <FormField
                 control={form.control}
                 name="hard_breach_bps"
@@ -440,7 +440,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Finance value floor" help="Orders above this value always require Finance too, regardless of score." tooltip={T.finance_value_floor_minor}>
+            <FieldHelp label="Finance value floor" tooltip={T.finance_value_floor_minor}>
               <FormField
                 control={form.control}
                 name="finance_value_floor_minor"
@@ -465,7 +465,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <FieldHelp label="Minimum margin" help="Candidates below this margin at list price are never suggested." tooltip={T.upsell_min_margin_bps}>
+            <FieldHelp label="Minimum margin" tooltip={T.upsell_min_margin_bps}>
               <FormField
                 control={form.control}
                 name="upsell_min_margin_bps"
@@ -479,7 +479,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Lift weight" help="How much co-purchase affinity drives the ranking." tooltip={T.upsell_w_lift_bps}>
+            <FieldHelp label="Lift weight" tooltip={T.upsell_w_lift_bps}>
               <FormField
                 control={form.control}
                 name="upsell_w_lift_bps"
@@ -493,7 +493,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Margin weight" help="How much the margin delta drives the ranking." tooltip={T.upsell_w_margin_bps}>
+            <FieldHelp label="Margin weight" tooltip={T.upsell_w_margin_bps}>
               <FormField
                 control={form.control}
                 name="upsell_w_margin_bps"
@@ -507,7 +507,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Promotion weight" help="Bonus given to promoted products." tooltip={T.upsell_w_promo_bps}>
+            <FieldHelp label="Promotion weight" tooltip={T.upsell_w_promo_bps}>
               <FormField
                 control={form.control}
                 name="upsell_w_promo_bps"
@@ -529,7 +529,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
             <h3 className="text-sm font-semibold">Anomaly detection &amp; stalled deals</h3>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <FieldHelp label="Sigma multiplier (σ)" help="A discount this many standard deviations above a rep's own average is flagged." tooltip={T.sigma_multiplier_x10}>
+            <FieldHelp label="Sigma multiplier (σ)" tooltip={T.sigma_multiplier_x10}>
               <FormField
                 control={form.control}
                 name="sigma_multiplier_x10"
@@ -543,7 +543,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Minimum sample size" help="A rep needs at least this many quotes before anomaly detection applies." tooltip={T.min_sample_size}>
+            <FieldHelp label="Minimum sample size" tooltip={T.min_sample_size}>
               <FormField
                 control={form.control}
                 name="min_sample_size"
@@ -557,7 +557,7 @@ export function PolicyForm({ source, onCreated, onCancel }: PolicyFormProps) {
                 )}
               />
             </FieldHelp>
-            <FieldHelp label="Stalled after (days)" help="A deal with no activity for this long is flagged as stalled." tooltip={T.stalled_after_days}>
+            <FieldHelp label="Stalled after (days)" tooltip={T.stalled_after_days}>
               <FormField
                 control={form.control}
                 name="stalled_after_days"

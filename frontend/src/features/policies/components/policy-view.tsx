@@ -120,17 +120,28 @@ export function PolicyView({ policy }: { policy: PolicyRead }) {
       <section className="space-y-3">
         <h3 className="text-sm font-semibold">Weights</h3>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <FieldHelp label="Blended overage weight" help="Revenue-weighted average overage across all lines.">
+          <FieldHelp label="Blended overage weight" tooltip={T.w_blended_bps}>
             <p className="text-lg font-medium tabular-nums"><Bps value={policy.weights.w_blended_bps} /></p>
           </FieldHelp>
-          <FieldHelp label="Worst-line weight" help="The single worst overage on any one line.">
+          <FieldHelp label="Worst-line weight" tooltip={T.w_worst_bps}>
             <p className="text-lg font-medium tabular-nums"><Bps value={policy.weights.w_worst_bps} /></p>
           </FieldHelp>
-          <FieldHelp label="Order value weight" help="Larger orders carry more scrutiny, up to the value reference.">
+          <FieldHelp label="Order value weight" tooltip={T.w_value_bps}>
             <p className="text-lg font-medium tabular-nums"><Bps value={policy.weights.w_value_bps} /></p>
           </FieldHelp>
-          <FieldHelp label="Margin shortfall weight" help="How far lines fall below their category's margin floor.">
+          <FieldHelp label="Margin shortfall weight" tooltip={T.w_margin_bps}>
             <p className="text-lg font-medium tabular-nums"><Bps value={policy.weights.w_margin_bps} /></p>
+          </FieldHelp>
+          <FieldHelp label="Overage scale" tooltip={T.scale_overage_bps}>
+            <p className="text-lg font-medium tabular-nums"><Bps value={policy.weights.scale_overage_bps} /></p>
+          </FieldHelp>
+          <FieldHelp label="Value reference" tooltip={T.value_reference_minor}>
+            <p className="text-lg font-medium">
+              <Money minor={policy.weights.value_reference_minor} currency="INR" />
+            </p>
+          </FieldHelp>
+          <FieldHelp label="Margin scale" tooltip={T.margin_scale_bps}>
+            <p className="text-lg font-medium tabular-nums"><Bps value={policy.weights.margin_scale_bps} /></p>
           </FieldHelp>
         </div>
       </section>
@@ -138,16 +149,16 @@ export function PolicyView({ policy }: { policy: PolicyRead }) {
       <section className="space-y-3">
         <h3 className="text-sm font-semibold">Thresholds</h3>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <FieldHelp label="L1 required at" help="Score at or above this needs Sales Manager approval.">
+          <FieldHelp label="L1 required at" tooltip={T.t1_l1_required}>
             <p className="text-lg font-medium tabular-nums">{policy.thresholds.t1_l1_required}</p>
           </FieldHelp>
-          <FieldHelp label="L2 required at" help="Score at or above this also needs Finance approval.">
+          <FieldHelp label="L2 required at" tooltip={T.t2_l2_required}>
             <p className="text-lg font-medium tabular-nums">{policy.thresholds.t2_l2_required}</p>
           </FieldHelp>
-          <FieldHelp label="Hard breach" help="Overage past a line's own ceiling that forces a minimum L1.">
+          <FieldHelp label="Hard breach" tooltip={T.hard_breach_bps}>
             <p className="text-lg font-medium tabular-nums"><Bps value={policy.thresholds.hard_breach_bps} /></p>
           </FieldHelp>
-          <FieldHelp label="Finance value floor" help="Orders above this value always require Finance too.">
+          <FieldHelp label="Finance value floor" tooltip={T.finance_value_floor_minor}>
             <p className="text-lg font-medium">
               <Money minor={policy.thresholds.finance_value_floor_minor} currency="INR" />
             </p>
@@ -155,13 +166,45 @@ export function PolicyView({ policy }: { policy: PolicyRead }) {
         </div>
       </section>
 
-      <section className="space-y-1">
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold">Upsell ranking</h3>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <FieldHelp label="Minimum margin" tooltip={T.upsell_min_margin_bps}>
+            <p className="text-lg font-medium tabular-nums"><Bps value={policy.upsell.min_margin_bps} /></p>
+          </FieldHelp>
+          <FieldHelp label="Lift weight" tooltip={T.upsell_w_lift_bps}>
+            <p className="text-lg font-medium tabular-nums"><Bps value={policy.upsell.w_lift_bps} /></p>
+          </FieldHelp>
+          <FieldHelp label="Margin weight" tooltip={T.upsell_w_margin_bps}>
+            <p className="text-lg font-medium tabular-nums"><Bps value={policy.upsell.w_margin_bps} /></p>
+          </FieldHelp>
+          <FieldHelp label="Promotion weight" tooltip={T.upsell_w_promo_bps}>
+            <p className="text-lg font-medium tabular-nums"><Bps value={policy.upsell.w_promo_bps} /></p>
+          </FieldHelp>
+        </div>
+      </section>
+
+      <section className="space-y-3">
         <h3 className="text-sm font-semibold">Anomaly detection &amp; stalled deals</h3>
-        <p className="text-sm text-muted-foreground">
-          Flags a discount past {(policy.anomaly.sigma_multiplier_bps / 10000).toFixed(1)}σ over a
-          rep's average (min. {policy.anomaly.min_sample_size} quotes), and a deal stalled after{" "}
-          {policy.stalled_after_days} days of inactivity.
-        </p>
+        <div className="grid grid-cols-1 divide-y divide-border rounded-lg border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="p-3">
+            <FieldHelp label="Sigma multiplier (σ)" tooltip={T.sigma_multiplier_x10}>
+              <p className="text-lg font-medium tabular-nums">
+                {(policy.anomaly.sigma_multiplier_bps / 10000).toFixed(1)}σ
+              </p>
+            </FieldHelp>
+          </div>
+          <div className="p-3">
+            <FieldHelp label="Minimum sample size" tooltip={T.min_sample_size}>
+              <p className="text-lg font-medium tabular-nums">{policy.anomaly.min_sample_size}</p>
+            </FieldHelp>
+          </div>
+          <div className="p-3">
+            <FieldHelp label="Stalled after (days)" tooltip={T.stalled_after_days}>
+              <p className="text-lg font-medium tabular-nums">{policy.stalled_after_days}</p>
+            </FieldHelp>
+          </div>
+        </div>
       </section>
     </div>
   );

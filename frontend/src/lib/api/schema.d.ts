@@ -1900,6 +1900,8 @@ export interface components {
                     [key: string]: string;
                 };
             };
+            /** Permission Resources */
+            permission_resources: components["schemas"]["PermissionResourceRead"][];
         };
         /** Page[AlertRead] */
         Page_AlertRead_: {
@@ -2158,6 +2160,20 @@ export interface components {
             method: string;
             /** Reference */
             reference?: string | null;
+        };
+        /**
+         * PermissionResourceRead
+         * @description One row of the roles screen's permission grid. `actions` is not always
+         *     read/write — e.g. `approvals` -> `["l1", "l2"]`, `reports` -> `["read", "export"]`.
+         *     See `app/core/permissions.py`, the single source of truth this is built from.
+         */
+        PermissionResourceRead: {
+            /** Resource */
+            resource: string;
+            /** Label */
+            label: string;
+            /** Actions */
+            actions: string[];
         };
         /** PolicyAnomaly */
         PolicyAnomaly: {
@@ -2619,6 +2635,8 @@ export interface components {
             subscription_plan_id: number | null;
             /** Currency */
             currency: string;
+            /** Is Active */
+            is_active: boolean;
             /** Variants */
             variants: components["schemas"]["ProductVariantRead"][];
             /**

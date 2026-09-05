@@ -21,9 +21,6 @@ from app.quotations.service import line_hash
 from app.quotations.transitions import transition
 from app.users.models import User
 
-_NOT_YET_APPROVED_STATUSES = {QuoteStatus.DRAFT, QuoteStatus.RETURNED_FOR_REVISION}
-
-
 def route_quotation(
     db: Session,
     quotation: Quotation,
@@ -35,7 +32,24 @@ def route_quotation(
 ) -> Quotation:
     """Re-runs the engine on the quotation's currently-saved lines and applies the
     routing decision: auto-approve, or open an approval chain starting at L1.
-    Raises `422 POLICY_VIOLATION` (writing nothing) if any line is below cost."""
+    Raises `422 POLICY_VIOLATION` (writing nothing) if any line is below cost.
+
+    The transition table only allows `returned_for_revision -> draft` (not directly
+    to `pending_l1`/`pending_l2`/`approved`) — a returned quote has to become a draft
+    again before it can route anywhere else. Resubmitting it is still a single user
+    action, though: take that intermediate hop here rather than making the rep
+    trigger it as a separate click."""
+    if quotation.status == QuoteStatus.RETURNED_FOR_REVISION.value and not force:
+        transition(
+            db,
+            quotation,
+            QuoteStatus.DRAFT,
+            actor,
+            expected_version=expected_version,
+            reason="Resubmitted for approval.",
+        )
+        expected_version = quotation.version  # transition() bumped it in place
+
     computation = compute_quotation(db, quotation)
     if computation.trace.outcome == "blocked":
         raise ValidationException(
