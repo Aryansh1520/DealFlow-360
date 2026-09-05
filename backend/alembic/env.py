@@ -7,6 +7,7 @@ from app.config.settings import settings
 from app.db.base import Base
 
 # Import all models so autogenerate can see them
+from app.customers import models as customers_models  # noqa: F401
 from app.roles import models as roles_models  # noqa: F401
 from app.users import models as users_models  # noqa: F401
 

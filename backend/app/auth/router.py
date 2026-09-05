@@ -6,22 +6,27 @@ from sqlalchemy.orm import Session
 
 from app.auth.schemas import (
     LoginRequest,
+    MeResponse,
     MeUpdate,
     RefreshRequest,
     RegisterRequest,
     TokenResponse,
 )
-from app.core.deps import CurrentUser
+from app.core.deps import CurrentPrincipal, CurrentUser
 from app.core.exceptions import ConflictException, UnauthorizedException
 from app.core.responses import SuccessResponse, ok
 from app.core.security import (
+    CUSTOMER,
+    INTERNAL,
     REFRESH_TOKEN,
+    UserType,
     create_access_token,
     create_refresh_token,
     decode_token,
     hash_password,
     verify_password,
 )
+from app.customers.models import Customer
 from app.db.seed import DEFAULT_USER_ROLE
 from app.db.session import get_db
 from app.roles.models import Role
@@ -33,10 +38,11 @@ router = APIRouter()
 DbSession = Annotated[Session, Depends(get_db)]
 
 
-def _token_pair(user_id: int) -> TokenResponse:
+def _token_pair(subject_id: int, user_type: UserType) -> TokenResponse:
     return TokenResponse(
-        access_token=create_access_token(user_id),
-        refresh_token=create_refresh_token(user_id),
+        access_token=create_access_token(subject_id, user_type),
+        refresh_token=create_refresh_token(subject_id, user_type),
+        user_type=user_type,
     )
 
 
@@ -46,6 +52,8 @@ def _token_pair(user_id: int) -> TokenResponse:
     status_code=status.HTTP_201_CREATED,
 )
 def register(payload: RegisterRequest, db: DbSession):
+    """Internal self-registration only. Customers are never self-registered — they're
+    created by staff (see `app/customers/router.py`)."""
     existing = db.scalar(select(User).where(User.email == payload.email))
     if existing:
         raise ConflictException("A user with this email already exists")
@@ -65,26 +73,55 @@ def register(payload: RegisterRequest, db: DbSession):
 
 @router.post("/login", response_model=SuccessResponse[TokenResponse])
 def login(payload: LoginRequest, db: DbSession):
+    """Single login for both sides of the system. An email is looked up as an
+    internal user first, then as a customer — whichever table it belongs to is the
+    only one checked against the password, so the two identities can never be
+    cross-authenticated against each other's hash."""
     user = db.scalar(select(User).where(User.email == payload.email))
-    if user is None or not verify_password(payload.password, user.hashed_password):
-        raise UnauthorizedException("Incorrect email or password")
-    if not user.is_active:
-        raise UnauthorizedException("This account is inactive")
-    return ok(_token_pair(user.id), "Logged in successfully.")
+    if user is not None:
+        if not verify_password(payload.password, user.hashed_password):
+            raise UnauthorizedException("Incorrect email or password")
+        if not user.is_active:
+            raise UnauthorizedException("This account is inactive")
+        return ok(_token_pair(user.id, INTERNAL), "Logged in successfully.")
+
+    customer = db.scalar(select(Customer).where(Customer.email == payload.email))
+    if customer is not None and customer.portal_enabled:
+        if not verify_password(payload.password, customer.hashed_password):
+            raise UnauthorizedException("Incorrect email or password")
+        return ok(_token_pair(customer.id, CUSTOMER), "Logged in successfully.")
+
+    raise UnauthorizedException("Incorrect email or password")
 
 
 @router.post("/refresh", response_model=SuccessResponse[TokenResponse])
 def refresh(payload: RefreshRequest, db: DbSession):
     token_payload = decode_token(payload.refresh_token, expected_type=REFRESH_TOKEN)
-    user = db.get(User, int(token_payload["sub"]))
-    if user is None or not user.is_active:
-        raise UnauthorizedException("User not found or inactive")
-    return ok(_token_pair(user.id), "Token refreshed successfully.")
+    user_type = token_payload.get("user_type")
+    subject_id = int(token_payload["sub"])
+
+    if user_type == INTERNAL:
+        user = db.get(User, subject_id)
+        if user is None or not user.is_active:
+            raise UnauthorizedException("User not found or inactive")
+        return ok(_token_pair(user.id, INTERNAL), "Token refreshed successfully.")
+
+    if user_type == CUSTOMER:
+        customer = db.get(Customer, subject_id)
+        if customer is None or not customer.portal_enabled:
+            raise UnauthorizedException("Customer not found or portal access disabled")
+        return ok(_token_pair(customer.id, CUSTOMER), "Token refreshed successfully.")
+
+    raise UnauthorizedException("Invalid token")
 
 
-@router.get("/me", response_model=SuccessResponse[UserRead])
-def read_me(current_user: CurrentUser):
-    return ok(current_user, "Current user retrieved successfully.")
+@router.get("/me", response_model=SuccessResponse[MeResponse])
+def read_me(principal: CurrentPrincipal):
+    if principal.user_type == INTERNAL:
+        me = MeResponse(user_type=INTERNAL, internal=principal.user)
+    else:
+        me = MeResponse(user_type=CUSTOMER, customer=principal.customer)
+    return ok(me, "Current user retrieved successfully.")
 
 
 @router.patch("/me", response_model=SuccessResponse[UserRead])

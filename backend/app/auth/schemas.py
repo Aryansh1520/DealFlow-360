@@ -1,5 +1,9 @@
 from pydantic import BaseModel, EmailStr, Field
 
+from app.core.security import UserType
+from app.customers.schemas import CustomerRead
+from app.users.schemas import UserRead
+
 
 class RegisterRequest(BaseModel):
     email: EmailStr
@@ -20,6 +24,15 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    user_type: UserType
+
+
+class MeResponse(BaseModel):
+    """Discriminated on `user_type`: exactly one of `internal` / `customer` is set."""
+
+    user_type: UserType
+    internal: UserRead | None = None
+    customer: CustomerRead | None = None
 
 
 class MeUpdate(BaseModel):

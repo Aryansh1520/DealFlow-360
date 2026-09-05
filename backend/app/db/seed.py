@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import settings
 from app.core.security import hash_password
+from app.customers.models import Customer
 from app.roles.models import Role
 from app.users.models import User
 
@@ -19,6 +20,10 @@ DEFAULT_ROLES = [
     {"name": ADMIN_ROLE, "description": "Full access", "permissions": ["*"]},
     {"name": DEFAULT_USER_ROLE, "description": "Standard user", "permissions": []},
 ]
+
+# Demo-only credentials, mirroring the seeded admin account below.
+DEMO_CUSTOMER_EMAIL = "customer@example.com"
+DEMO_CUSTOMER_PASSWORD = "customer12345"
 
 
 def seed_db(db: Session) -> None:
@@ -40,3 +45,17 @@ def seed_db(db: Session) -> None:
         )
         db.commit()
         logger.info("Seeded admin user: %s", settings.admin_email)
+
+    if db.scalar(select(Customer).where(Customer.email == DEMO_CUSTOMER_EMAIL)) is None:
+        db.add(
+            Customer(
+                name="Acme Corp",
+                email=DEMO_CUSTOMER_EMAIL,
+                company="Acme Corp",
+                tier="gold",
+                hashed_password=hash_password(DEMO_CUSTOMER_PASSWORD),
+                portal_enabled=True,
+            )
+        )
+        db.commit()
+        logger.info("Seeded demo customer: %s", DEMO_CUSTOMER_EMAIL)
