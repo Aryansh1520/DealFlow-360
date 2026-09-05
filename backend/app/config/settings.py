@@ -38,6 +38,16 @@ class Settings(BaseSettings):
     # Files
     upload_dir: str = "uploads"
 
+    # Redis / task queue (Dramatiq)
+    redis_url: str = "redis://localhost:6379/0"
+
+    # MinIO / object storage
+    minio_endpoint: str = "localhost:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket: str = "dealflow360"
+    minio_secure: bool = False
+
     # URLs
     frontend_url: str = "http://localhost:3001"
 

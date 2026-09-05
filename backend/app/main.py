@@ -8,6 +8,7 @@ from app.config.logging import setup_logging
 from app.config.settings import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.middleware import register_middleware
+from app.core.storage import ensure_bucket
 from app.db.seed import seed_db
 from app.db.session import SessionLocal
 
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI):
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
     with SessionLocal() as db:
         seed_db(db)
+    ensure_bucket()
     yield
 
 
