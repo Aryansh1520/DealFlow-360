@@ -6,16 +6,18 @@ import { Loader2 } from "lucide-react";
 
 import { useAuth } from "@/features/auth/auth-context";
 
-/** Renders children only for authenticated users; redirects to /login otherwise. */
+/** Renders children only for authenticated sessions (internal or customer); redirects
+ * to /login otherwise. Type-specific routing (which home a session belongs in) is
+ * handled by `InternalGuard` / `PortalGuard` layered on top of this. */
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!isLoading && !user) {
+    if (!isLoading && !isAuthenticated) {
       router.replace("/login");
     }
-  }, [isLoading, user, router]);
+  }, [isLoading, isAuthenticated, router]);
 
   if (isLoading) {
     return (
@@ -25,7 +27,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!user) {
+  if (!isAuthenticated) {
     return null;
   }
 

@@ -1,5 +1,5 @@
 import { apiClient, type TokenPair } from "@/lib/api-client";
-import type { LoginPayload, RegisterPayload, User } from "@/features/auth/types";
+import type { LoginPayload, Me, RegisterPayload, User } from "@/features/auth/types";
 
 export const authApi = {
   login: async (payload: LoginPayload): Promise<TokenPair> => {
@@ -12,8 +12,8 @@ export const authApi = {
     return data;
   },
 
-  me: async (): Promise<User> => {
-    const { data } = await apiClient.get<User>("/auth/me");
+  me: async (): Promise<Me> => {
+    const { data } = await apiClient.get<Me>("/auth/me");
     return data;
   },
 

@@ -1,4 +1,11 @@
-import { LayoutDashboard, ShieldCheck, User, Users, type LucideIcon } from "lucide-react";
+import {
+  Briefcase,
+  LayoutDashboard,
+  ShieldCheck,
+  User,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 
 export interface NavItem {
   title: string;
@@ -16,6 +23,12 @@ export const navItems: NavItem[] = [
     title: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
+  },
+  {
+    title: "Customers",
+    href: "/customers",
+    icon: Briefcase,
+    permissions: ["customers:read"],
   },
   {
     title: "User Management",

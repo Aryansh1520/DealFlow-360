@@ -1,6 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 
 import { API_URL } from "@/lib/config";
+import type { UserType } from "@/lib/types";
 
 const ACCESS_TOKEN_KEY = "access_token";
 const REFRESH_TOKEN_KEY = "refresh_token";
@@ -8,6 +9,7 @@ const REFRESH_TOKEN_KEY = "refresh_token";
 export interface TokenPair {
   access_token: string;
   refresh_token: string;
+  user_type: UserType;
 }
 
 /** Envelope every backend endpoint responds with. */

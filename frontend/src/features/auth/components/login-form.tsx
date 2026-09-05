@@ -28,7 +28,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { useAuth } from "@/features/auth/auth-context";
+import { homePathFor, useAuth } from "@/features/auth/auth-context";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -48,8 +48,8 @@ export function LoginForm() {
 
   const onSubmit = async (values: LoginValues) => {
     try {
-      await login(values);
-      router.push("/dashboard");
+      const me = await login(values);
+      router.push(homePathFor(me.user_type));
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
