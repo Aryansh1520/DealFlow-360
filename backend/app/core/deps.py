@@ -7,6 +7,7 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.enums import ErrorCode
 from app.core.exceptions import ForbiddenException, UnauthorizedException
 from app.core.security import ACCESS_TOKEN, CUSTOMER, INTERNAL, decode_token
 from app.customers.models import Customer
@@ -61,7 +62,9 @@ def get_current_user(principal: CurrentPrincipal) -> User:
     """Requires the caller to be internal staff. Authenticated customers get a 403,
     not a 401 — they're logged in, just not for this side of the system."""
     if principal.user_type != INTERNAL or principal.user is None:
-        raise ForbiddenException("This action requires an internal account")
+        raise ForbiddenException(
+            "This action requires an internal account", code=ErrorCode.FORBIDDEN_PRINCIPAL
+        )
     return principal.user
 
 
@@ -71,7 +74,9 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 def get_current_customer(principal: CurrentPrincipal) -> Customer:
     """Requires the caller to be a portal customer. Mirrors `get_current_user`."""
     if principal.user_type != CUSTOMER or principal.customer is None:
-        raise ForbiddenException("This action requires a customer account")
+        raise ForbiddenException(
+            "This action requires a customer account", code=ErrorCode.FORBIDDEN_PRINCIPAL
+        )
     return principal.customer
 
 

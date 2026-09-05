@@ -10,3 +10,4 @@ PyJWT>=2.10,<3
 bcrypt>=4.3,<5
 dramatiq[redis]>=1.17,<2
 minio>=7.2,<8
+pytest>=8.3,<9

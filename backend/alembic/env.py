@@ -7,9 +7,14 @@ from app.config.settings import settings
 from app.db.base import Base
 
 # Import all models so autogenerate can see them
+from app.catalog import models as catalog_models  # noqa: F401
 from app.customers import models as customers_models  # noqa: F401
+from app.policies import models as policies_models  # noqa: F401
+from app.pricing import models as pricing_models  # noqa: F401
 from app.roles import models as roles_models  # noqa: F401
+from app.subscriptions import models as subscriptions_models  # noqa: F401
 from app.users import models as users_models  # noqa: F401
+from app.warehouses import models as warehouses_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

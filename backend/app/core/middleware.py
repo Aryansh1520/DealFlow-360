@@ -1,16 +1,20 @@
-"""CORS, request logging, and rate-limiting middleware."""
+"""CORS, request logging, request-ID, and rate-limiting middleware."""
 
 import logging
 import time
+import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
 from app.config.settings import settings
+from app.core.request_context import get_request_id, set_request_id
 from app.core.security import ACCESS_TOKEN, decode_token
 
 logger = logging.getLogger("app.request")
+
+SLOW_REQUEST_THRESHOLD_MS = 300
 
 # key -> (window_start_epoch_seconds, request_count). Process-local by design;
 # with multiple workers/replicas each counts independently, so the effective
@@ -61,7 +65,7 @@ def register_middleware(app: FastAPI) -> None:
                     content={
                         "success": False,
                         "message": "Too many requests. Please try again later.",
-                        "data": None,
+                        "data": {"code": None, "request_id": get_request_id()},
                     },
                 )
 
@@ -72,13 +76,27 @@ def register_middleware(app: FastAPI) -> None:
         start = time.perf_counter()
         response = await call_next(request)
         duration_ms = (time.perf_counter() - start) * 1000
-        logger.info(
-            "%s %s -> %s (%.1fms)",
+        log = logger.warning if duration_ms > SLOW_REQUEST_THRESHOLD_MS else logger.info
+        log(
+            "%s %s -> %s (%.1fms) request_id=%s",
             request.method,
             request.url.path,
             response.status_code,
             duration_ms,
+            get_request_id(),
         )
+        return response
+
+    # Outermost of the three `@app.middleware("http")` handlers (registration order:
+    # last-added wraps the others first) — every downstream handler, including the
+    # rate limiter and every exception handler, sees the request ID via the contextvar
+    # before it runs.
+    @app.middleware("http")
+    async def request_id_middleware(request: Request, call_next):
+        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+        set_request_id(request_id)
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
         return response
 
     app.add_middleware(
