@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Money } from "@/components/ui/money";
 import { formatBps } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import type { DashboardStat } from "@/lib/api/types";
 
 function renderValue(stat: DashboardStat, currency: string) {
@@ -26,7 +27,14 @@ export function StatCards({
   currency: string;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div
+      className={cn(
+        "grid grid-cols-2 gap-4",
+        stats.length % 3 === 0 && stats.length % 4 !== 0
+          ? "lg:grid-cols-3"
+          : "lg:grid-cols-4"
+      )}
+    >
       {stats.map((stat) => (
         <Card key={stat.key}>
           <CardContent className="p-4">

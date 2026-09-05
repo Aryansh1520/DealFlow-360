@@ -16,6 +16,7 @@ import { useInvalidateOnFrame, useLiveEvents } from "@/lib/live/use-live-events"
 import type { ProductRead, SuggestionRead } from "@/lib/api/types";
 import { useAllowedTransitions } from "@/features/meta/hooks";
 import { DecisionTraceDrawer } from "@/features/approvals/components/decision-trace-drawer";
+import { CounterRequestBanner } from "@/features/quotations/components/counter-request-banner";
 import { QuotationTabs } from "@/features/quotations/components/quotation-tabs";
 import { CataloguePanel } from "@/features/quotations/components/catalogue-panel";
 import { LineTable } from "@/features/quotations/components/line-table";
@@ -226,6 +227,8 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
   return (
     <div className="space-y-4">
       <QuotationTabs quotationId={quotationId} />
+
+      <CounterRequestBanner quotation={quotation} />
 
       {!editable && quotation.status.startsWith("pending_") && (
         <Alert>

@@ -38,6 +38,9 @@ PORTAL_VISIBLE_EVENT_TYPES = {
 }
 
 _NEGOTIABLE = {QuoteStatus.SENT.value, QuoteStatus.UNDER_NEGOTIATION.value}
+# A re-approved quote (customer countered → re-routed → approved) is confirmable
+# again without a manual re-send.
+_CONFIRMABLE = _NEGOTIABLE | {QuoteStatus.APPROVED.value}
 
 
 def _actor_label(event: QuoteEvent, customer_name: str) -> str:
@@ -101,6 +104,6 @@ def to_portal_quotation_read(db: Session, quotation: Quotation) -> PortalQuotati
         lines=lines,
         totals=totals,
         timeline=timeline,
-        can_confirm=quotation.status in _NEGOTIABLE,
+        can_confirm=quotation.status in _CONFIRMABLE,
         can_counter=quotation.status in _NEGOTIABLE,
     )

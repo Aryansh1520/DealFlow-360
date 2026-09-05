@@ -173,11 +173,11 @@ function DealRow({ row }: { row: DealHealthRow }) {
       className="cursor-pointer"
       onClick={() => router.push(`/workspace/quotations/${row.quotation_id}`)}
     >
-      <TableCell className="font-mono text-xs">{row.reference}</TableCell>
-      <TableCell>{row.customer_name}</TableCell>
-      <TableCell className="text-muted-foreground">{row.owner_rep_name}</TableCell>
-      <TableCell>{stageLabel}</TableCell>
-      <TableCell className="text-right">
+      <TableCell className="whitespace-nowrap font-mono text-xs">{row.reference}</TableCell>
+      <TableCell className="max-w-[10rem] truncate">{row.customer_name}</TableCell>
+      <TableCell className="whitespace-nowrap text-muted-foreground">{row.owner_rep_name}</TableCell>
+      <TableCell className="whitespace-nowrap">{stageLabel}</TableCell>
+      <TableCell className="whitespace-nowrap text-right">
         <Money minor={row.total_minor} currency={row.currency} compact />
       </TableCell>
       <TableCell className="text-right tabular-nums">{formatBps(row.margin_bps)}</TableCell>
@@ -197,7 +197,10 @@ function DealRow({ row }: { row: DealHealthRow }) {
 function FlagChip({ flag }: { flag: string }) {
   const label = useEnumLabel("alert_type", flag);
   return (
-    <Badge variant="warning" className="text-[10px]">
+    <Badge
+      variant="warning"
+      className="whitespace-nowrap px-1.5 py-0 text-[10px] font-medium leading-4"
+    >
       {label}
     </Badge>
   );

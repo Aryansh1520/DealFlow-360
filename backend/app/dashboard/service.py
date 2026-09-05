@@ -564,11 +564,11 @@ def dashboard_summary(db: Session, user: User) -> DashboardSummary:
     open_alerts = int(db.scalar(select(func.count()).select_from(DealAlert).where(DealAlert.acknowledged.is_(False))) or 0)
 
     if dtype == DashboardType.SUPER_ADMIN:
+        team_size = int(db.scalar(select(func.count()).select_from(User)) or 0)
         stat("open_pipeline", "Open pipeline", open_pipeline, "currency")
         stat("won_value", "Won value", won_value, "currency")
         stat("pending_approvals", "Awaiting approval", pending, "count")
-        stat("open_alerts", "Open alerts", open_alerts, "count")
-        stat("users", "Team members", db.scalar(select(func.count()).select_from(User)) or 0, "count")
+        stat("open_alerts", "Open alerts", open_alerts, "count", hint=f"{team_size} team members")
     elif dtype == DashboardType.SALES_MANAGER:
         stat("pending_approvals", "Awaiting your approval", pending, "count")
         stat("open_pipeline", "Open pipeline", open_pipeline, "currency")

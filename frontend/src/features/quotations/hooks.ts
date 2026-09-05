@@ -55,6 +55,25 @@ export function useCreateQuotation() {
   });
 }
 
+export function useUpdateQuotation(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      expected_version: number;
+      order_discount_bps?: number;
+      valid_until?: string | null;
+    }) => quotationsApi.update(id, payload),
+    onSuccess: (quotation) => {
+      queryClient.setQueryData([QUOTATIONS_KEY, id], quotation);
+      queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "events"] });
+      queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY] });
+    },
+    onError: (error) => {
+      if (!onVersionConflict(queryClient, id, error)) toast.error(getErrorMessage(error));
+    },
+  });
+}
+
 export function useAddLine(id: number) {
   const queryClient = useQueryClient();
   return useMutation({

@@ -239,7 +239,10 @@ QUOTE_TRANSITIONS: dict[str, list[str]] = {
         QuoteStatus.CANCELLED,
     ],
     QuoteStatus.RETURNED_FOR_REVISION: [QuoteStatus.DRAFT, QuoteStatus.CANCELLED],
-    QuoteStatus.APPROVED: [QuoteStatus.SENT, QuoteStatus.CANCELLED],
+    # `approved -> confirmed`: a customer who already asked to confirm and then had
+    # their terms re-approved shouldn't have to wait for a manual re-send; a rep
+    # can also confirm straight from approved on the customer's behalf.
+    QuoteStatus.APPROVED: [QuoteStatus.SENT, QuoteStatus.CONFIRMED, QuoteStatus.CANCELLED],
     QuoteStatus.SENT: [
         QuoteStatus.UNDER_NEGOTIATION,
         QuoteStatus.CONFIRMED,

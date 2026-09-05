@@ -26,10 +26,25 @@ from app.quotations.serialization import compute_quotation
 from app.quotations.transitions import transition
 
 _NEGOTIABLE = {QuoteStatus.SENT.value, QuoteStatus.UNDER_NEGOTIATION.value}
+_CONFIRMABLE = _NEGOTIABLE | {QuoteStatus.APPROVED.value}
+
+# Statuses a quotation is still purely internal in — the customer should not see
+# these in the portal even for their own `customer_id`. Everything else (approved
+# onwards, plus pending_* re-entries) is visible: an approved quote is ready for
+# the customer to confirm without the rep needing a separate "send" click.
+_PORTAL_HIDDEN_STATUSES = {
+    QuoteStatus.DRAFT.value,
+    QuoteStatus.REJECTED.value,
+    QuoteStatus.RETURNED_FOR_REVISION.value,
+}
 
 
 def _load_or_404(db: Session, quotation_id: int, principal: Principal) -> Quotation:
-    quotation = db.scalar(scoped_query(Quotation, principal).where(Quotation.id == quotation_id))
+    quotation = db.scalar(
+        scoped_query(Quotation, principal)
+        .where(Quotation.id == quotation_id)
+        .where(Quotation.status.not_in(_PORTAL_HIDDEN_STATUSES))
+    )
     if quotation is None:
         raise NotFoundException("Quotation not found")
     return quotation
@@ -38,7 +53,9 @@ def _load_or_404(db: Session, quotation_id: int, principal: Principal) -> Quotat
 def list_my_quotations(
     db: Session, principal: Principal, params: PageParams
 ) -> tuple[list[PortalQuotationRead], int]:
-    base = scoped_query(Quotation, principal)
+    base = scoped_query(Quotation, principal).where(
+        Quotation.status.not_in(_PORTAL_HIDDEN_STATUSES)
+    )
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
     rows = db.scalars(
         base.order_by(Quotation.updated_at.desc())
@@ -146,7 +163,7 @@ def confirm(
 ) -> tuple[str, bool]:
     """Returns `(status, re_entered_approval)`."""
     quotation = _load_or_404(db, quotation_id, principal)
-    if quotation.status not in _NEGOTIABLE:
+    if quotation.status not in _CONFIRMABLE:
         raise ConflictException(
             f"This quotation is {quotation.status} and can no longer be confirmed.",
             code=ErrorCode.ILLEGAL_TRANSITION,
@@ -167,6 +184,17 @@ def confirm(
         summary=f"{quotation.customer.name} confirmed the quotation on the current terms.",
         payload={},
     )
+
+    # Confirming from `approved` means the terms were already signed off (the
+    # customer's earlier confirm re-entered approval and it came back out). No need
+    # to re-run the routing — go straight to confirmed.
+    if quotation.status == QuoteStatus.APPROVED.value:
+        transition(
+            db, quotation, QuoteStatus.CONFIRMED.value, customer, expected_version=quotation.version
+        )
+        db.commit()
+        db.refresh(quotation)
+        return quotation.status, False
 
     computation = compute_quotation(db, quotation)
     if computation.required_approvals:

@@ -350,6 +350,30 @@ function ConfirmCard({ quote }: { quote: PortalQuotationRead }) {
     );
   }
 
+  // Already confirmed / being fulfilled / invoiced / paid — nothing to do here.
+  const DONE: Record<string, string> = {
+    confirmed: "This quotation is confirmed — your order is being prepared.",
+    fulfilling: "Your order is confirmed and being prepared for delivery.",
+    invoiced: "Your order is confirmed and has been invoiced.",
+    paid: "This order is confirmed and paid in full. Thank you!",
+  };
+  if (DONE[quote.status]) {
+    return (
+      <Alert>
+        <CheckCircle2 className="h-4 w-4 text-positive" />
+        <AlertTitle>All set</AlertTitle>
+        <AlertDescription>{DONE[quote.status]}</AlertDescription>
+      </Alert>
+    );
+  }
+
+  const notYet =
+    quote.status === "expired"
+      ? "This quotation has expired — ask your rep for a fresh one."
+      : quote.status === "cancelled"
+        ? "This quotation was cancelled."
+        : "Your rep is still preparing this quotation — you'll be able to confirm once it's sent to you.";
+
   return (
     <Card>
       <CardHeader>
@@ -381,9 +405,7 @@ function ConfirmCard({ quote }: { quote: PortalQuotationRead }) {
           Confirm quotation
         </Button>
         {!quote.can_confirm && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            This quotation isn&apos;t ready to confirm yet.
-          </p>
+          <p className="mt-2 text-xs text-muted-foreground">{notYet}</p>
         )}
       </CardContent>
     </Card>
@@ -392,12 +414,18 @@ function ConfirmCard({ quote }: { quote: PortalQuotationRead }) {
 
 function ReEnteredApprovalNotice({ quote }: { quote: PortalQuotationRead }) {
   if (quote.status !== "pending_l1" && quote.status !== "pending_l2") return null;
+  // Covers both a fresh quote still in internal sign-off and a quote that
+  // re-entered approval after the customer requested different terms.
+  const askedForChanges = quote.timeline.some((e) => e.event_type === "quote.customer_countered");
   return (
     <Alert>
-      <AlertTitle>Your requested terms are with our team</AlertTitle>
+      <AlertTitle>
+        {askedForChanges ? "Your requested terms are with our team" : "Being finalised by our team"}
+      </AlertTitle>
       <AlertDescription>
-        We&apos;re reviewing the changes you asked for and will update this page as soon as
-        there&apos;s news.
+        {askedForChanges
+          ? "We're reviewing the changes you asked for and will update this page as soon as there's news."
+          : "This quotation is going through internal sign-off. You'll be able to confirm it once it's approved."}
       </AlertDescription>
     </Alert>
   );
