@@ -41,6 +41,14 @@ class ApprovalAction(StrEnum):
     RETURN_FOR_REVISION = "return_for_revision"
 
 
+class ActorType(StrEnum):
+    """Not part of `MetaEnums` — used inline on `QuoteEventRead.actor_type`."""
+
+    INTERNAL = "internal"
+    CUSTOMER = "customer"
+    SYSTEM = "system"
+
+
 class ApprovalStatus(StrEnum):
     """Not part of `MetaEnums` (the contract only lists `approval_level` /
     `approval_action`), but used inline on `ApprovalRead.status`."""
