@@ -1,8 +1,19 @@
-# FLOWS.md — Manual test workflow for Frontend Phase 1
+# FLOWS.md — Manual test workflow, Frontend Phases 1 & 2
 
-Everything below exercises the work in `FRONTEND_PHASE_1.md`: codegen pipeline, money/bps
-primitives, enums boot sequence, hardened API client, shell/nav, design pass, and the six
-config screens. Backend Phase 1 is already live — nothing here needs mocks.
+Part A exercises `FRONTEND_PHASE_1.md`: codegen pipeline, money/bps primitives, enums boot
+sequence, hardened API client, shell/nav, design pass, and the six config screens. Part B
+(new) exercises `FRONTEND_PHASE_2.md`: the quotation builder, decision trace, approvals and
+event timeline. **Backend Phases 1 and 2 are both fully live** — nothing in this file needs
+mocks; a mock quotations/approvals layer was built and used briefly while backend Phase 2
+was in flight, then deleted the moment the real endpoints landed (merged from
+`feature/decision-workflow`), per the mock-layer cleanup rule in `FRONTEND_PHASE_1.md` Task
+4. Every flow below has been verified against the real backend, both via the UI routes
+(server-rendered 200s) and via direct API calls (curl) confirming response shapes, the
+worked risk-score example, and the version-conflict error shape.
+
+---
+
+# Part A — Phase 1
 
 ---
 
@@ -98,8 +109,8 @@ yarn typecheck     # should be clean
 ## 3. Navigation & guards (Task 5)
 
 1. Log in as `admin@example.com`. Sidebar should show: Dashboard, Workspace (Quotations /
-   Pipeline, both tagged "Phase 2" and disabled), Approvals ("Phase 2", disabled),
-   Fulfilment / Billing / Deal Health / Reports ("Phase 3", disabled), Configuration
+   Pipeline — both live now), Approvals (live), Fulfilment / Billing / Deal Health / Reports
+   (still tagged "Phase 3" and disabled — those screens don't exist yet), Configuration
    (Products, Price Lists, Discount Policy, Warehouses, Subscription Plans, Customers),
    User Management (Users, Roles).
 2. Log in as `rep@example.com` — Configuration should only show items the rep has
@@ -231,9 +242,171 @@ Active/Inactive column or badge — it's a write-only field from the frontend's 
 view. Not worked around silently: this needs a contract version bump (add `is_active` to
 `ProductRead`) before an active/inactive badge can be shown.
 
-## Explicitly not covered here
+---
 
-Mocks (Task 4) were skipped: every Phase 1 endpoint is already live on the backend, so
-there was nothing to mock. Quotation builder, pipeline, approvals, trace panel,
-fulfilment, billing, portal, dashboard and SSE are Phase 2/3 — see
-`FRONTEND_PHASE_2.md` / `FRONTEND_PHASE_3.md` for their own flows once those phases land.
+# Part B — Phase 2: Quotation builder, decision engine, approvals
+
+Real backend Phase 2 (from `feature/decision-workflow`, merged in). Every step below was
+run against it directly.
+
+## 11. The flagship demo scenario — problem statement's own example
+
+This is the single most important flow to rehearse. Login: `rep@example.com`.
+
+1. **Workspace → Quotations → New quotation.** Pick **Acme Corp** (Gold tier). You land on
+   the builder.
+2. From the catalogue panel (left), add **Laptop Pro 14** and **Setup Service**.
+3. Set Laptop Pro 14's discount to **12%**. Watch the totals block update within ~250ms
+   (debounced preview) — no full-page spinner, just a hairline progress bar while fetching.
+   The line should stay in the neutral tone (within its 15% ceiling).
+4. Set Setup Service's discount to **18%**. The row should flip to the `warning` tone with a
+   tooltip: *"8.0 points over the 10.0% ceiling."* The totals block's risk chip should land
+   around **38–41/100** (varies slightly from the doc's illustrative numbers because the
+   real seeded cost prices differ — the *mechanism* is what matters) and show **"Will
+   require: Sales Manager approval."**
+5. Click **Why?** — the decision trace drawer opens: headline summary, the four-component
+   contribution bar (blended/worst/value/margin) with the L1/L2 threshold ruler, the
+   per-line table with the winning ceiling underlined and the breach row toned red/amber,
+   and the rules-fired chips (`LINE_CEILING_BREACH`, `HARD_BREACH_OVERRIDE`,
+   `BLENDED_THRESHOLD`).
+6. Click **Submit for Approval** → confirm. Status badge flips to *Pending L1*. Scroll the
+   Activity panel — `quote.created`, two `quote.line_added`, `quote.submitted` events, each
+   with a real actor name and human sentence.
+7. **Switch to `manager@example.com`** (a second browser profile or incognito).
+   Approvals → the quotation appears in the queue with reference, customer, total, risk,
+   level, waiting-since.
+8. Open it. The same trace panel renders inline (byte-identical numbers to what the rep
+   saw — that's the point). Click **Approve** → confirm. Status flips to *Approved*, chain
+   stepper shows the L1 step as approved with your name.
+9. Back on the rep's tab, refresh the builder (or just the events panel) — `quote.approved`
+   event now shows "Manav Manager moved this quotation from pending_l1 to approved."
+
+## 12. Live margin & upsell (Task 2, Task 3)
+
+1. Create a new draft quotation for any customer, add one product.
+2. Open devtools → Network, filter to `preview`. Edit the discount field by typing digits
+   slowly for ~10 seconds, then stop. You should see **far fewer than 10** preview
+   requests fire (debounced + aborted-superseded) — that's the measured claim from
+   `FRONTEND_PHASE_2.md` Task 2b.
+3. Open the upsell panel (right column) — suggestions should appear with a lift chip,
+   support count, margin delta in the `positive` tone, and the backend-composed `reason`
+   string rendered verbatim.
+4. Click **Add to Quote** on a suggestion — the totals block should briefly flash (a ring
+   pulse, ~400ms) as the margin bar moves. Confirm the new line appears tagged "Added from
+   suggestion."
+5. Dismiss a different suggestion — it should disappear immediately (optimistic update) and
+   not reappear on next load.
+
+## 13. Approvals — reject and return-for-revision (Task 5)
+
+1. Submit a quote that requires approval (any Gold/Silver customer with a category-breaching
+   discount works). As `manager@example.com`, open it from the queue.
+2. Click **Reject** — the dialog should refuse to submit with an empty reason. Fill a
+   reason, confirm. Status flips to *Rejected*; a terminal state — the chain stepper shows
+   the rejected step and no further actions render.
+3. Repeat with **Return for revision** on a fresh submission — status should flip to
+   *Returned for revision*, and the quotation becomes editable again in the builder (the
+   catalogue panel and line edits re-enable).
+4. Optimistic concurrency: open the same quotation in two tabs as the rep. Edit a discount
+   in tab A and let it commit. In tab B (stale `version`), try to edit a different line —
+   you should get a non-blocking toast ("This quote changed — refreshed to the latest
+   version") and tab B's data should refresh to the server's current truth, **not** lose
+   your place in the form.
+5. Idempotency: click **Approve** and, before the request resolves, click it again as fast
+   as possible (or throttle the network to make the window wider) — the quotation must
+   advance exactly one step, never double-approve.
+
+## 14. Pipeline & event timeline (Task 1, Task 6)
+
+1. Workspace → Pipeline. Columns should be generated from `/meta/enums`' `quote_status`
+   list, with every terminal status (`paid`, `rejected`, `cancelled`, `expired`) collapsed
+   into one "Closed" column — not a hardcoded column list.
+2. Cards show customer, amount, a risk chip toned by the same L1/L2 thresholds as the
+   builder, and "Nd inactive."
+3. On the quotation detail, expand an event's "Details" — the raw `payload` JSON should
+   render, collapsed by default, dev-visible only on click.
+4. **Reload Data** button on the quotations list should show a spinner and actually
+   refetch (check the Network tab), not just decorate.
+
+---
+
+## Known contract gap (Phase 2)
+
+`API_CONTRACT.md` §4.6 documents `GET /approvals/queue` and `GET /approvals/{id}` but no
+"list every approval sequence for one quotation" endpoint — needed for the chain stepper.
+`features/approvals/api.ts::chainForQuotation` works around this by fetching the
+unfiltered queue and filtering by `quotation_id` client-side (fine at hackathon scale;
+flagged rather than silently invented). Ask Dev A for a `quotation_id` filter if the queue
+grows large enough for this to matter.
+
+---
+
+# Demo-readiness vs. the problem statement (`DealFlow360.md`)
+
+Cross-checking against the judge-facing tier list and the must-have/good-to-have split in
+`context/DealFlow360.md`.
+
+## Tier 1 — MUST SHOW: all five done
+
+| # | Item | Status |
+|---|---|---|
+| 1 | Quotation builder | ✅ Real backend, three-column layout, live editing |
+| 2 | Discount governance (tier × category ceiling) | ✅ Real engine, `MIN(tier, category)` |
+| 3 | Live margin | ✅ Debounced `/preview`, margin bar, no client-side math |
+| 4 | Decision trace | ✅ All four blocks, real trace data, shared component |
+| 5 | Automatic approval routing | ✅ `/submit` routes per risk score + hard gates |
+
+## Tier 2 — VERY STRONG: all three done
+
+| # | Item | Status |
+|---|---|---|
+| 6 | Upsell recommendation | ✅ Real affinity-backed suggestions, margin delta, lift |
+| 7 | Approval workflow | ✅ Queue, act, chain stepper, reject/return with reason |
+| 8 | Audit timeline | ✅ Real event ledger, backend-composed summaries |
+
+## Tier 3 — DIFFERENTIATION: not started (Phase 3)
+
+| # | Item | Status |
+|---|---|---|
+| 9 | Customer portal (negotiation) | ❌ Only the Phase 1 placeholder "My Quotations" shell exists |
+| 10 | Live negotiation over SSE | ❌ No SSE endpoint or hook yet |
+| 11 | Warehouse split / backorders | ❌ `fulfillment` module not built (backend or frontend) |
+| 12 | Hybrid billing (one-time + subscription) | ❌ `billing` module not built |
+
+## Tier 4 — Polish: not started (Phase 3)
+
+| # | Item | Status |
+|---|---|---|
+| 13 | Deal health dashboard | ❌ `deal_metrics` read model doesn't exist yet |
+| 14 | Anomaly detection (discount vs. rep average) | ❌ `rep_discount_stats` / alerts not built |
+| 15 | Reports | ❌ Not built |
+| 16 | Exports (PDF/XLS) | ❌ Not built |
+| 17 | Cache / perf metrics | ❌ Not built (graceful to skip per the doc) |
+
+## Must-have checklist (`DealFlow360.md` §27)
+
+**Business:** Authentication ✅ · Products ✅ · Price lists ✅ · Customer tiers ✅ ·
+Discount ceilings ✅ · Approval routing ✅ · Quotation creation ✅ · Margin calculation ✅ ·
+Upsell/cross-sell ✅ · Warehouse splitting ❌ · Backorders ❌ · Subscription + one-time
+billing ❌ · Customer portal (negotiation) ❌ · Negotiation ❌ · Deal health ❌ ·
+Reporting ❌.
+
+**Technical correctness:** Business rules live in application logic, not hardcoded ✅ ·
+Real separate portal principal (structural, from the auth slice) ✅ · RBAC ✅ · Audit trail
+(event ledger) ✅ · Real seeded data (12 months of history + real affinity) ✅ · Working
+end-to-end flow, quote → live margin → trace → submit → approve, verified via UI and curl
+✅ · Two complete demo flows — the **internal** flow (rep → manager) is fully verified; the
+**two-window portal/SSE** flow is not built yet (Phase 3).
+
+## What this means for the next demo round
+
+The safe, honest framing right now: *"We've completed the identity/principal foundation,
+the full backend configuration surface, and the core self-governing quote lifecycle —
+quotation → live risk scoring → explainable approval routing → audit trail. That's Tier 1
+and Tier 2 in full, running against a real database and a real decision engine, not a
+demo stub."* The customer portal negotiation, SSE, fulfilment and billing (Tier 3/4) are
+the explicit next milestone — `FRONTEND_PHASE_3.md` / `BACKEND_PHASE_3.md` — and should be
+described as "next," not implied to already work.
+
+**Rehearse flow §11 above precisely as written** — it's the exact problem-statement
+scenario and currently the strongest thing in the app to put in front of judges.

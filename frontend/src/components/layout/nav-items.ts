@@ -51,22 +51,22 @@ export const navItems: NavItem[] = [
         href: "/workspace/quotations",
         icon: FileText,
         permissions: ["quotations:read"],
-        comingInPhase: 2,
       },
       {
         title: "Pipeline",
         href: "/workspace/pipeline",
         icon: KanbanSquare,
         permissions: ["quotations:read"],
-        comingInPhase: 2,
       },
     ],
   },
   {
+    // No permission gate here — a user might hold `approvals:l1`,
+    // `approvals:l2`, both or neither; the page itself shows only the levels
+    // the signed-in user can act on (see `(dashboard)/approvals/page.tsx`).
     title: "Approvals",
+    href: "/approvals",
     icon: ClipboardCheck,
-    permissions: ["approvals:l1"],
-    comingInPhase: 2,
   },
   {
     title: "Fulfilment",
