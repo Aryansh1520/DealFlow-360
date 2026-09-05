@@ -100,6 +100,9 @@ export type BillingScheduleEntry = S["BillingScheduleEntry"];
 export type InvoiceRead = S["InvoiceRead"];
 export type InvoiceLineRead = S["InvoiceLineRead"];
 export type PaymentRequest = S["PaymentRequest"];
+export type SupersedeRequest = S["SupersedeRequest"];
+export type SupersedeResponse = S["SupersedeResponse"];
+export type SupersedeLine = S["SupersedeLine"];
 
 // ---- Customer portal (Phase 3) -----------------------------------------------------------
 export type PortalQuotationRead = S["PortalQuotationRead"];
@@ -116,6 +119,20 @@ export type MagicLinkRedeemResponse = S["MagicLinkRedeemResponse"];
 // ---- Dashboard, alerts & reports (Phase 3) ------------------------------------------------
 export type DealHealthRow = S["DealHealthRow"];
 export type AlertRead = S["AlertRead"];
+export type DashboardSummary = S["DashboardSummary"];
+export type DashboardStat = S["DashboardStat"];
+export type SalesReportRow = S["SalesReportRow"];
+export type DashboardType = DashboardSummary["dashboard_type"];
+
+// ---- Live events / SSE (Phase 3, API_CONTRACT.md §4.11) ---------------------------------
+export interface StreamFrame {
+  id: string;
+  scope: string;
+  event_type: string;
+  quotation_id: number | null;
+  payload: Record<string, unknown>;
+  emitted_at: string;
+}
 
 // ---- Auth / users / roles / customers (existing starter slice) -----------------------------
 export type TokenResponse = S["TokenResponse"];

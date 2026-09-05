@@ -9,12 +9,16 @@ from app.db.base import Base
 # Import all models so autogenerate can see them
 from app.affinity import models as affinity_models  # noqa: F401
 from app.approvals import models as approvals_models  # noqa: F401
+from app.billing import models as billing_models  # noqa: F401
 from app.catalog import models as catalog_models  # noqa: F401
 from app.core import idempotency as idempotency_models  # noqa: F401
 from app.customers import models as customers_models  # noqa: F401
+from app.dashboard import models as dashboard_models  # noqa: F401
 from app.events import models as events_models  # noqa: F401
+from app.fulfillment import models as fulfillment_models  # noqa: F401
 from app.organizations import models as organizations_models  # noqa: F401
 from app.policies import models as policies_models  # noqa: F401
+from app.portal import models as portal_models  # noqa: F401
 from app.pricing import models as pricing_models  # noqa: F401
 from app.quotations import models as quotations_models  # noqa: F401
 from app.roles import models as roles_models  # noqa: F401

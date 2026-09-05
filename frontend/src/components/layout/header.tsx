@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/features/auth/auth-context";
+import { LiveIndicator } from "@/components/layout/live-indicator";
 import { NavLinks } from "@/components/layout/nav-links";
 import { navItems, type NavItem } from "@/components/layout/nav-items";
 
@@ -74,7 +75,8 @@ export function Header() {
         </span>
       )}
 
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-4">
+        <LiveIndicator />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">

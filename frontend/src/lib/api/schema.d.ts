@@ -1005,11 +1005,29 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Invoice Lineage
-         * @description Oldest -> newest, so the UI can show "superseded by INV-…".
-         */
+        /** Get Invoice Lineage */
         get: operations["get_invoice_lineage_api_v1_invoices__invoice_id__lineage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invoices/{invoice_id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Invoice Pdf
+         * @description Streams the rendered PDF straight out of MinIO — never off local disk, and
+         *     only after this `billing:read` check has passed.
+         */
+        get: operations["download_invoice_pdf_api_v1_invoices__invoice_id__pdf_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1154,6 +1172,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dashboard Summary
+         * @description Role-shaped landing payload — layout chosen by `current_user.role.dashboard_type`.
+         */
+        get: operations["dashboard_summary_api_v1_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard/deal-health": {
         parameters: {
             query?: never;
@@ -1263,15 +1301,47 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Stream
-         * @description `text/event-stream` (Phase 3). Scope authorisation — a customer may only
-         *     subscribe to `quote:{id}` for a quote they own; internal reps need
-         *     `quotations:read` — is enforced once the real handler lands in `app/events/stream.py`.
-         */
+        /** Stream */
         get: operations["stream_api_v1_events_stream_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Jobs */
+        get: operations["list_jobs_api_v1_admin_jobs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/{name}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger Job
+         * @description Run a scheduled job right now instead of waiting for its interval tick.
+         */
+        post: operations["trigger_job_api_v1_admin_jobs__name__run_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1573,6 +1643,52 @@ export interface components {
             /** Portal Enabled */
             portal_enabled?: boolean | null;
         };
+        /** DashboardStat */
+        DashboardStat: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Value */
+            value: number;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "currency" | "count" | "bps" | "days";
+            /** Hint */
+            hint?: string | null;
+        };
+        /**
+         * DashboardSummary
+         * @description `GET /dashboard` — the role-shaped landing payload. `dashboard_type` comes
+         *     from the caller's `role.dashboard_type` (set on the Roles screen); the frontend
+         *     renders one of four layouts from it. RBAC still gates every underlying endpoint.
+         */
+        DashboardSummary: {
+            dashboard_type: components["schemas"]["DashboardType"];
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Currency */
+            currency: string;
+            /** Stats */
+            stats: components["schemas"]["DashboardStat"][];
+            /** Alerts */
+            alerts: components["schemas"]["AlertRead"][];
+        };
+        /**
+         * DashboardType
+         * @description Which dashboard the frontend renders for a principal — chosen by the
+         *     caller's `role.dashboard_type`, set on the Roles screen of the admin panel.
+         *     A *dashboard layout*, not an RBAC concept: permissions still gate every
+         *     endpoint the dashboard calls. `generic` is the safe default for any role
+         *     an admin hasn't explicitly assigned one to.
+         * @enum {string}
+         */
+        DashboardType: "super_admin" | "sales_manager" | "finance_ops" | "generic";
         /** DealHealthRow */
         DealHealthRow: {
             /** Quotation Id */
@@ -1896,6 +2012,10 @@ export interface components {
             document_type: string[];
             /** Alert Type */
             alert_type: string[];
+            /** Billing Schedule Status */
+            billing_schedule_status: string[];
+            /** Dashboard Type */
+            dashboard_type: string[];
             /** Transitions */
             transitions: {
                 [key: string]: string[];
@@ -2105,6 +2225,19 @@ export interface components {
             /** Pages */
             pages: number;
         };
+        /** Page[SalesReportRow] */
+        Page_SalesReportRow_: {
+            /** Items */
+            items: components["schemas"]["SalesReportRow"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Pages */
+            pages: number;
+        };
         /** Page[StockRead] */
         Page_StockRead_: {
             /** Items */
@@ -2148,21 +2281,6 @@ export interface components {
         Page_WarehouseRead_: {
             /** Items */
             items: components["schemas"]["WarehouseRead"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-            /** Pages */
-            pages: number;
-        };
-        /** Page[dict] */
-        Page_dict_: {
-            /** Items */
-            items: {
-                [key: string]: unknown;
-            }[];
             /** Total */
             total: number;
             /** Page */
@@ -2965,6 +3083,8 @@ export interface components {
             description?: string | null;
             /** Permissions */
             permissions?: string[];
+            /** @default generic */
+            dashboard_type: components["schemas"]["DashboardType"];
         };
         /** RoleRead */
         RoleRead: {
@@ -2974,6 +3094,8 @@ export interface components {
             description?: string | null;
             /** Permissions */
             permissions?: string[];
+            /** @default generic */
+            dashboard_type: components["schemas"]["DashboardType"];
             /** Id */
             id: number;
         };
@@ -2985,6 +3107,28 @@ export interface components {
             description?: string | null;
             /** Permissions */
             permissions?: string[] | null;
+            dashboard_type?: components["schemas"]["DashboardType"] | null;
+        };
+        /** SalesReportRow */
+        SalesReportRow: {
+            /** Period */
+            period: string;
+            /** Quotation Id */
+            quotation_id: number;
+            /** Reference */
+            reference: string;
+            /** Customer Name */
+            customer_name: string;
+            /** Owner Rep Name */
+            owner_rep_name: string;
+            /** Status */
+            status: string;
+            /** Total Minor */
+            total_minor: number;
+            /** Margin Bps */
+            margin_bps: number;
+            /** Currency */
+            currency: string;
         };
         /** ShipmentLine */
         ShipmentLine: {
@@ -3162,6 +3306,20 @@ export interface components {
              */
             message: string;
             data: components["schemas"]["CustomerRead"];
+        };
+        /** SuccessResponse[DashboardSummary] */
+        SuccessResponse_DashboardSummary_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /**
+             * Message
+             * @default Success
+             */
+            message: string;
+            data: components["schemas"]["DashboardSummary"];
         };
         /** SuccessResponse[DecisionTrace] */
         SuccessResponse_DecisionTrace_: {
@@ -3472,6 +3630,20 @@ export interface components {
             message: string;
             data: components["schemas"]["Page_RoleRead_"];
         };
+        /** SuccessResponse[Page[SalesReportRow]] */
+        SuccessResponse_Page_SalesReportRow__: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /**
+             * Message
+             * @default Success
+             */
+            message: string;
+            data: components["schemas"]["Page_SalesReportRow_"];
+        };
         /** SuccessResponse[Page[StockRead]] */
         SuccessResponse_Page_StockRead__: {
             /**
@@ -3527,20 +3699,6 @@ export interface components {
              */
             message: string;
             data: components["schemas"]["Page_WarehouseRead_"];
-        };
-        /** SuccessResponse[Page[dict]] */
-        SuccessResponse_Page_dict__: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            /**
-             * Message
-             * @default Success
-             */
-            message: string;
-            data: components["schemas"]["Page_dict_"];
         };
         /** SuccessResponse[PolicyRead] */
         SuccessResponse_PolicyRead_: {
@@ -3766,6 +3924,23 @@ export interface components {
             message: string;
             data: components["schemas"]["WarehouseRead"];
         };
+        /** SuccessResponse[dict] */
+        SuccessResponse_dict_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /**
+             * Message
+             * @default Success
+             */
+            message: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+        };
         /** SuccessResponse[list[BillingScheduleEntry]] */
         SuccessResponse_list_BillingScheduleEntry__: {
             /**
@@ -3810,6 +3985,21 @@ export interface components {
             message: string;
             /** Data */
             data: components["schemas"]["SuggestionRead"][];
+        };
+        /** SuccessResponse[list[str]] */
+        SuccessResponse_list_str__: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /**
+             * Message
+             * @default Success
+             */
+            message: string;
+            /** Data */
+            data: string[];
         };
         /** SuggestionRead */
         SuggestionRead: {
@@ -7016,6 +7206,37 @@ export interface operations {
             };
         };
     };
+    download_invoice_pdf_api_v1_invoices__invoice_id__pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoice_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     record_payment_api_v1_invoices__invoice_id__payments_post: {
         parameters: {
             query?: never;
@@ -7301,6 +7522,26 @@ export interface operations {
             };
         };
     };
+    dashboard_summary_api_v1_dashboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_DashboardSummary_"];
+                };
+            };
+        };
+    };
     deal_health_api_v1_dashboard_deal_health_get: {
         parameters: {
             query?: {
@@ -7478,7 +7719,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SuccessResponse_Page_dict__"];
+                    "application/json": components["schemas"]["SuccessResponse_Page_SalesReportRow__"];
                 };
             };
             /** @description Validation Error */
@@ -7546,6 +7787,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_jobs_api_v1_admin_jobs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_list_str__"];
+                };
+            };
+        };
+    };
+    trigger_job_api_v1_admin_jobs__name__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_dict_"];
                 };
             };
             /** @description Validation Error */

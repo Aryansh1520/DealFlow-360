@@ -2,11 +2,15 @@ import type { UserType } from "@/lib/types";
 
 export type { UserType };
 
+export type DashboardType = "super_admin" | "sales_manager" | "finance_ops" | "generic";
+
 export interface Role {
   id: number;
   name: string;
   description: string | null;
   permissions: string[];
+  /** Which of the four dashboard layouts the frontend renders for this role. */
+  dashboard_type: DashboardType;
 }
 
 export interface User {

@@ -24,15 +24,31 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Role } from "@/features/auth/types";
 import { useEnums } from "@/features/meta/hooks";
 import { PermissionGrid } from "@/features/roles/components/permission-grid";
 import { useCreateRole, useUpdateRole } from "@/features/roles/hooks";
 
+const DASHBOARD_TYPES = ["super_admin", "sales_manager", "finance_ops", "generic"] as const;
+const DASHBOARD_LABELS: Record<string, string> = {
+  super_admin: "Super admin",
+  sales_manager: "Sales manager",
+  finance_ops: "Finance / operations",
+  generic: "Generic",
+};
+
 const roleSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().max(255).optional(),
   permissions: z.array(z.string()),
+  dashboard_type: z.enum(DASHBOARD_TYPES),
 });
 
 type RoleValues = z.infer<typeof roleSchema>;
@@ -53,7 +69,7 @@ export function RoleFormDialog({ open, onOpenChange, role }: RoleFormDialogProps
 
   const form = useForm<RoleValues>({
     resolver: zodResolver(roleSchema),
-    defaultValues: { name: "", description: "", permissions: [] },
+    defaultValues: { name: "", description: "", permissions: [], dashboard_type: "generic" },
   });
 
   React.useEffect(() => {
@@ -62,6 +78,7 @@ export function RoleFormDialog({ open, onOpenChange, role }: RoleFormDialogProps
         name: role?.name ?? "",
         description: role?.description ?? "",
         permissions: role?.permissions ?? [],
+        dashboard_type: role?.dashboard_type ?? "generic",
       });
     }
   }, [open, role, form]);
@@ -71,6 +88,7 @@ export function RoleFormDialog({ open, onOpenChange, role }: RoleFormDialogProps
       name: values.name,
       description: values.description || null,
       permissions: values.permissions,
+      dashboard_type: values.dashboard_type,
     };
 
     if (isEdit && role) {
@@ -116,6 +134,34 @@ export function RoleFormDialog({ open, onOpenChange, role }: RoleFormDialogProps
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="dashboard_type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Dashboard layout</FormLabel>
+                  <FormControl>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DASHBOARD_TYPES.map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {DASHBOARD_LABELS[t]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">
+                    Which dashboard users with this role land on. Presentation only — it
+                    doesn&apos;t change what they can access.
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}

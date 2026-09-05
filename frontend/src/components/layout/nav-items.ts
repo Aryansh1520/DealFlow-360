@@ -69,28 +69,16 @@ export const navItems: NavItem[] = [
     icon: ClipboardCheck,
   },
   {
-    title: "Fulfilment",
-    icon: Truck,
-    permissions: ["fulfillment:read"],
-    comingInPhase: 3,
-  },
-  {
-    title: "Billing",
-    icon: Receipt,
-    permissions: ["billing:read"],
-    comingInPhase: 3,
-  },
-  {
     title: "Deal Health",
+    href: "/dashboard/deal-health",
     icon: Gauge,
     permissions: ["dashboard:read"],
-    comingInPhase: 3,
   },
   {
     title: "Reports",
+    href: "/reports",
     icon: FileBarChart,
     permissions: ["reports:read"],
-    comingInPhase: 3,
   },
   {
     title: "Configuration",

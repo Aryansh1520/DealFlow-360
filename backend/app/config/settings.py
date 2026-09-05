@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     # Must equal the version at the top of context/API_CONTRACT.md — asserted on the
     # frontend at boot (`GET /meta/enums`).
-    contract_version: str = "v1.4.0"
+    contract_version: str = "v1.5.0"
     host: str = "0.0.0.0"
     port: int = 8001
 
@@ -43,6 +43,13 @@ class Settings(BaseSettings):
 
     # Redis / task queue (Dramatiq)
     redis_url: str = "redis://localhost:6379/0"
+
+    # Cache layer (app/core/cache.py): "memory" (in-process LRU) | "redis"
+    cache_backend: str = "memory"
+
+    # APScheduler background jobs, started in the app lifespan. Disable on
+    # multi-worker deployments so the jobs don't run once per worker.
+    scheduler_enabled: bool = True
 
     # Rate limiting (in-memory, per IP + per account)
     rate_limit_enabled: bool = True

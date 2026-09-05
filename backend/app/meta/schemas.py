@@ -29,6 +29,8 @@ class MetaEnums(BaseModel):
     invoice_status: list[str]
     document_type: list[str]
     alert_type: list[str]
+    billing_schedule_status: list[str]
+    dashboard_type: list[str]
     transitions: dict[str, list[str]]
     labels: dict[str, dict[str, str]]
     permission_resources: list[PermissionResourceRead]

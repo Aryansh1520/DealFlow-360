@@ -34,6 +34,8 @@ def get_enums(principal: CurrentPrincipal):
         invoice_status=enum_values("invoice_status"),
         document_type=enum_values("document_type"),
         alert_type=enum_values("alert_type"),
+        billing_schedule_status=enum_values("billing_schedule_status"),
+        dashboard_type=enum_values("dashboard_type"),
         transitions=QUOTE_TRANSITIONS,
         labels=enum_labels(),
         permission_resources=[

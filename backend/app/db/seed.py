@@ -7,9 +7,9 @@ Reset with: `docker compose exec backend python -m app.db.seed --reset`
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.affinity.service import rebuild_affinity
@@ -60,9 +60,11 @@ FINANCE_ROLE = "Finance"
 OPS_ROLE = "Operations"
 
 # Permission strings from API_CONTRACT.md §5 / app/core/permissions.py.
+# `dashboard_type` (Phase 3) picks which of the four dashboard layouts the frontend
+# renders for the role — an admin can re-point it on the Roles screen.
 DEFAULT_ROLES = [
-    {"name": ADMIN_ROLE, "description": "Full access", "permissions": ["*"]},
-    {"name": DEFAULT_USER_ROLE, "description": "Standard user", "permissions": []},
+    {"name": ADMIN_ROLE, "description": "Full access", "permissions": ["*"], "dashboard_type": "super_admin"},
+    {"name": DEFAULT_USER_ROLE, "description": "Standard user", "permissions": [], "dashboard_type": "generic"},
     {
         "name": SALES_REP_ROLE,
         "description": "Builds and owns quotations",
@@ -73,6 +75,7 @@ DEFAULT_ROLES = [
             "quotations:write",
             "dashboard:read",
         ],
+        "dashboard_type": "generic",
     },
     {
         "name": SALES_MANAGER_ROLE,
@@ -91,6 +94,7 @@ DEFAULT_ROLES = [
             "reports:read",
             "reports:export",
         ],
+        "dashboard_type": "sales_manager",
     },
     {
         "name": FINANCE_ROLE,
@@ -107,11 +111,13 @@ DEFAULT_ROLES = [
             "reports:read",
             "reports:export",
         ],
+        "dashboard_type": "finance_ops",
     },
     {
         "name": OPS_ROLE,
         "description": "Owns warehouses and fulfilment",
         "permissions": ["warehouses:read", "warehouses:write", "fulfillment:read", "fulfillment:write"],
+        "dashboard_type": "finance_ops",
     },
 ]
 
@@ -119,6 +125,9 @@ DEFAULT_ROLES = [
 DEMO_PASSWORD = "demo12345"
 DEMO_USERS = [
     {"email": "rep@example.com", "full_name": "Riya Rep", "role": SALES_REP_ROLE},
+    # A second rep with a deliberately looser discount habit, so per-rep z-scores
+    # (Phase 3 anomaly detection) are visibly different. See `_seed_history_v2`.
+    {"email": "rep2@example.com", "full_name": "Dev Discount", "role": SALES_REP_ROLE},
     {"email": "manager@example.com", "full_name": "Manav Manager", "role": SALES_MANAGER_ROLE},
     {"email": "finance@example.com", "full_name": "Farah Finance", "role": FINANCE_ROLE},
     {"email": "ops@example.com", "full_name": "Om Ops", "role": OPS_ROLE},
@@ -249,9 +258,14 @@ POLICY_V1 = {
 
 def _seed_roles(db: Session) -> None:
     for spec in DEFAULT_ROLES:
-        if db.scalar(select(Role).where(Role.name == spec["name"])) is None:
+        existing = db.scalar(select(Role).where(Role.name == spec["name"]))
+        if existing is None:
             db.add(Role(**spec))
             logger.info("Seeded role: %s", spec["name"])
+        elif existing.dashboard_type != spec["dashboard_type"]:
+            # Keep the default roles' dashboard assignment current on re-seed; an
+            # admin's own custom roles / overrides are untouched.
+            existing.dashboard_type = spec["dashboard_type"]
     db.commit()
 
 
@@ -595,7 +609,188 @@ def _seed_historical_quotations_and_affinity(db: Session) -> None:
     logger.info("Rebuilt product affinity: %d rows", affinity_rows)
 
 
-def seed_db(db: Session) -> None:
+def _backdate(quotation: Quotation, when: datetime) -> None:
+    quotation.created_at = when
+    quotation.updated_at = when
+    quotation.last_activity_at = when
+
+
+def _seed_history_v2(db: Session) -> None:
+    """`--history`: ~180 confirmed/paid quotations spread over 12 backdated months
+    with two distinct per-rep discount profiles (Riya conservative ~6%, Dev loose
+    ~14%), so Phase 3's affinity + anomaly detection have real signal. Then
+    `rebuild_affinity` and `rebuild_rep_stats`. Idempotent: skipped once >100
+    quotations exist."""
+    import random
+
+    from app.dashboard.service import rebuild_rep_stats
+
+    if (db.scalar(select(func.count()).select_from(Quotation)) or 0) > 100:
+        logger.info("history already seeded — skipping --history")
+        return
+
+    rng = random.Random(42)
+    reps = {
+        u.email: u
+        for u in db.scalars(
+            select(User).where(User.email.in_(["rep@example.com", "rep2@example.com"]))
+        )
+    }
+    profiles = {
+        "rep@example.com": (600, 180),   # mean 6.0%, sd ~1.8%
+        "rep2@example.com": (1400, 300),  # mean 14.0%, sd ~3.0%
+    }
+    customers = db.scalars(select(Customer)).all()
+    products_by_sku = {p.sku: p for p in db.scalars(select(Product)).all()}
+    policy = db.scalar(select(DiscountPolicy).where(DiscountPolicy.is_active.is_(True)))
+    if len(reps) < 2 or not customers or policy is None:
+        logger.warning("--history preconditions missing — skipping")
+        return
+
+    now = datetime.now(timezone.utc)
+    created = 0
+    for i in range(180):
+        email = "rep@example.com" if i % 2 == 0 else "rep2@example.com"
+        rep = reps[email]
+        mean_bps, sd_bps = profiles[email]
+        disc = max(0, min(2500, int(rng.gauss(mean_bps, sd_bps))))
+        bundle = AFFINITY_BUNDLES[i % len(AFFINITY_BUNDLES)]
+        customer = customers[i % len(customers)]
+        when = now - timedelta(days=rng.randint(5, 360))
+
+        quotation = Quotation(
+            reference="PENDING",
+            customer_id=customer.id,
+            owner_rep_id=rep.id,
+            status="paid",
+            version=1,
+            policy_version=policy.version,
+            order_discount_bps=disc,
+            currency="INR",
+        )
+        db.add(quotation)
+        db.flush()
+        quotation.reference = f"QT-{when.year}-{quotation.id:06d}"
+        quotation.order_number = f"SO-{when.year}-{quotation.id:06d}"
+        _backdate(quotation, when)
+
+        for position, sku in enumerate(bundle):
+            product = products_by_sku.get(sku)
+            if product is None:
+                continue
+            db.add(
+                QuoteLine(
+                    quotation_id=quotation.id,
+                    product_id=product.id,
+                    variant_id=None,
+                    category_id=product.category_id,
+                    line_type=product.line_type,
+                    subscription_plan_id=product.subscription_plan_id,
+                    quantity=rng.randint(1, 4),
+                    unit_price_minor=product.list_price_minor,
+                    cost_price_minor=product.cost_price_minor,
+                    discount_bps=0,
+                    added_from_suggestion=False,
+                    position=position,
+                )
+            )
+        created += 1
+    db.commit()
+    logger.info("Seeded %d backdated historical quotations (--history)", created)
+
+    logger.info("Rebuilt product affinity: %d rows", rebuild_affinity(db))
+    logger.info("Rebuilt rep discount stats for %d reps", rebuild_rep_stats(db))
+
+
+def _seed_demo_fixtures(db: Session) -> None:
+    """`--demo`: the specific fixtures the 5-minute walkthrough leans on."""
+    from app.core.enums import QuoteStatus
+    from app.events.service import record_event
+    from app.quotations.transitions import transition
+
+    rep = db.scalar(select(User).where(User.email == "rep@example.com"))
+    products = {p.sku: p for p in db.scalars(select(Product)).all()}
+    if rep is None:
+        return
+
+    # `--demo` is idempotent at the coarse grain: once a `sent` quote exists the
+    # fixtures have already been laid down.
+    if db.scalar(select(func.count()).select_from(Quotation).where(Quotation.status == QuoteStatus.SENT.value)):
+        logger.info("demo fixtures already present — skipping --demo")
+        return
+
+    def _quote_for(company: str, sku: str, qty: int, *, status_flow: list[str], age_days: int = 0) -> Quotation | None:
+        customer = db.scalar(select(Customer).where(Customer.company == company))
+        product = products.get(sku)
+        if customer is None or product is None:
+            return None
+        quotation = Quotation(
+            reference="PENDING",
+            customer_id=customer.id,
+            owner_rep_id=rep.id,
+            status=QuoteStatus.DRAFT.value,
+            version=1,
+            policy_version=db.scalar(select(DiscountPolicy.version).where(DiscountPolicy.is_active.is_(True))),
+            order_discount_bps=0,
+            currency="INR",
+        )
+        db.add(quotation)
+        db.flush()
+        quotation.reference = f"QT-{datetime.now(timezone.utc).year}-{quotation.id:06d}"
+        db.add(
+            QuoteLine(
+                quotation_id=quotation.id,
+                product_id=product.id,
+                variant_id=None,
+                category_id=product.category_id,
+                line_type=product.line_type,
+                subscription_plan_id=product.subscription_plan_id,
+                quantity=qty,
+                unit_price_minor=product.list_price_minor,
+                cost_price_minor=product.cost_price_minor,
+                discount_bps=0,
+                position=0,
+            )
+        )
+        record_event(db, quotation, "quote.created", rep, summary="Demo fixture created.", payload={})
+        db.flush()
+        db.refresh(quotation)  # so quotation.lines is populated for the engine on transition
+        version = quotation.version
+        for to in status_flow:
+            transition(db, quotation, to, rep, expected_version=version)
+            version = quotation.version
+        if age_days:
+            stale = datetime.now(timezone.utc) - timedelta(days=age_days)
+            quotation.last_activity_at = stale
+            quotation.updated_at = stale
+        db.commit()
+        return quotation
+
+    # Beta Industries: sat untouched for 9 days -> stalled_deal alert fires.
+    _quote_for("Beta Industries", "LAP-PRO-14", 2, status_flow=[QuoteStatus.APPROVED.value, QuoteStatus.SENT.value], age_days=9)
+    # Corex Ltd: `sent` with a live magic link, for the two-window portal demo.
+    _quote_for("Corex Ltd", "DSK-X1", 1, status_flow=[QuoteStatus.APPROVED.value, QuoteStatus.SENT.value])
+    # A visible split: stock 3 in Main / 5 in East, ordered qty 6.
+    split = _quote_for("Acme Corp", "MON-27", 6, status_flow=[QuoteStatus.APPROVED.value, QuoteStatus.SENT.value, QuoteStatus.CONFIRMED.value])
+    if split is not None:
+        mon = products["MON-27"]
+        for st in db.scalars(select(Stock).where(Stock.product_id == mon.id)):
+            st.on_hand = 3 if st.warehouse.code == "MAIN" else 5
+            st.reserved = 0
+    # A visible backorder: total stock 2, ordered qty 5.
+    bo = _quote_for("Acme Corp", "SWT-24P", 5, status_flow=[QuoteStatus.APPROVED.value, QuoteStatus.SENT.value, QuoteStatus.CONFIRMED.value])
+    if bo is not None:
+        swt = products["SWT-24P"]
+        first = True
+        for st in db.scalars(select(Stock).where(Stock.product_id == swt.id)):
+            st.on_hand = 2 if first else 0
+            st.reserved = 0
+            first = False
+    db.commit()
+    logger.info("Seeded demo fixtures (--demo)")
+
+
+def seed_db(db: Session, *, history: bool = False, demo: bool = False) -> None:
     demo_org = _get_or_create_demo_org(db)
     set_current_org(db, demo_org.id)
 
@@ -608,6 +803,10 @@ def seed_db(db: Session) -> None:
     _seed_subscription_plans(db)
     _seed_policy(db, categories)
     _seed_historical_quotations_and_affinity(db)
+    if history:
+        _seed_history_v2(db)
+    if demo:
+        _seed_demo_fixtures(db)
 
 
 if __name__ == "__main__":
@@ -621,6 +820,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--reset", action="store_true", help="Drop and recreate all tables first")
+    parser.add_argument("--history", action="store_true", help="Seed 12 months of backdated history + rebuild affinity/rep stats")
+    parser.add_argument("--demo", action="store_true", help="Seed the 5-minute-walkthrough demo fixtures")
     args = parser.parse_args()
 
     if args.reset:
@@ -629,12 +830,16 @@ if __name__ == "__main__":
         # (e.g.) `quote_approvals`'s FK to `quotations` and tries to drop out of order.
         from app.affinity import models as _affinity_models  # noqa: F401
         from app.approvals import models as _approvals_models  # noqa: F401
+        from app.billing import models as _billing_models  # noqa: F401
         from app.core import idempotency as _idempotency_models  # noqa: F401
+        from app.dashboard import models as _dashboard_models  # noqa: F401
         from app.events import models as _events_models  # noqa: F401
+        from app.fulfillment import models as _fulfillment_models  # noqa: F401
+        from app.portal import models as _portal_models  # noqa: F401
 
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
 
     with SessionLocal() as session:
-        seed_db(session)
+        seed_db(session, history=args.history, demo=args.demo)
     logger.info("Seed complete.")

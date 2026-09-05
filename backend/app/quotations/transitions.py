@@ -5,11 +5,12 @@ future change writes `quotation.status = ...` anywhere else, that's a bug — ro
 through `transition()` instead.
 """
 
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
-from app.core.enums import QUOTE_TRANSITIONS, EventType
+from app.core.enums import QUOTE_TRANSITIONS, EventType, QuoteStatus
 from app.core.exceptions import ConflictException, ErrorCode
 from app.customers.models import Customer
 from app.events.service import record_event
@@ -91,4 +92,44 @@ def transition(
         payload={"from_status": from_status, "to_status": to_status, "reason": reason},
     )
 
+    _apply_transition_side_effects(db, quotation, to_status, actor)
     return quotation
+
+
+def _apply_transition_side_effects(
+    db: Session, quotation: "Quotation", to_status: str, actor: User | Customer | None
+) -> None:
+    """Phase 3 side effects that ride along with a status change, done in the same
+    transaction so they either all land or all roll back:
+
+    * → `sent`      : mint a single-use portal magic link (Task 3)
+    * → `confirmed` : assign the order number and generate the subscription
+                      billing schedule (Task 3 / Task 4)
+    """
+    if to_status == QuoteStatus.SENT.value:
+        from app.portal.magic_link import issue_for_quotation
+
+        issue_for_quotation(db, quotation, actor)
+    elif to_status == QuoteStatus.CONFIRMED.value:
+        if not quotation.order_number:
+            quotation.order_number = (
+                f"SO-{datetime.now(timezone.utc).year}-{quotation.id:06d}"
+            )
+        from app.billing.service import generate_billing_schedule
+
+        generate_billing_schedule(db, quotation)
+
+        # Anomaly detection runs against the rep's *prior* discount history, then
+        # this quote folds into it (Welford). Task 5.
+        from app.dashboard.service import evaluate_quotation_alerts, update_rep_discount_stats
+        from app.quotations.serialization import compute_quotation
+
+        try:
+            evaluate_quotation_alerts(db, quotation)
+            update_rep_discount_stats(
+                db, quotation.owner_rep_id, compute_quotation(db, quotation).effective_discount_bps
+            )
+        except Exception:  # never let analytics break a confirm
+            import logging
+
+            logging.getLogger(__name__).exception("post-confirm analytics failed for %s", quotation.id)

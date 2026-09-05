@@ -16,6 +16,7 @@ from app.customers.router import router as customers_router
 from app.dashboard.router import router as dashboard_router
 from app.events.router import router as events_router
 from app.fulfillment.router import router as fulfillment_router
+from app.jobs.router import router as jobs_router
 from app.meta.router import health_router, router as meta_router
 from app.policies.router import router as policies_router
 from app.portal.router import public_router as portal_public_router, router as portal_router
@@ -52,3 +53,4 @@ api_router.include_router(portal_public_router, prefix="/portal", tags=["portal"
 api_router.include_router(portal_router, prefix="/portal", tags=["portal"])
 api_router.include_router(dashboard_router, tags=["dashboard"])
 api_router.include_router(events_router, prefix="/events", tags=["events"])
+api_router.include_router(jobs_router, prefix="/admin", tags=["admin"])

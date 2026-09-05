@@ -158,6 +158,49 @@ class AlertSeverity(StrEnum):
     HIGH = "high"
 
 
+class ReservationStatus(StrEnum):
+    """Lifecycle of a `stock_reservations` row — `BACKEND_PHASE_3.md` Task 1."""
+
+    HELD = "held"
+    COMMITTED = "committed"
+    RELEASED = "released"
+
+
+class ShipmentStatus(StrEnum):
+    """Lifecycle of a `shipments` row."""
+
+    PLANNED = "planned"
+    DISPATCHED = "dispatched"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+
+
+class BackorderStatus(StrEnum):
+    OPEN = "open"
+    CONSOLIDATED = "consolidated"
+    CANCELLED = "cancelled"
+
+
+class BillingScheduleStatus(StrEnum):
+    SCHEDULED = "scheduled"
+    INVOICED = "invoiced"
+    PAID = "paid"
+    CANCELLED = "cancelled"
+
+
+class DashboardType(StrEnum):
+    """Which dashboard the frontend renders for a principal — chosen by the
+    caller's `role.dashboard_type`, set on the Roles screen of the admin panel.
+    A *dashboard layout*, not an RBAC concept: permissions still gate every
+    endpoint the dashboard calls. `generic` is the safe default for any role
+    an admin hasn't explicitly assigned one to."""
+
+    SUPER_ADMIN = "super_admin"
+    SALES_MANAGER = "sales_manager"
+    FINANCE_OPS = "finance_ops"
+    GENERIC = "generic"
+
+
 class ErrorCode(StrEnum):
     """`ApiError.code` — see `API_CONTRACT.md` §1 "Error envelope"."""
 
@@ -210,7 +253,9 @@ QUOTE_TRANSITIONS: dict[str, list[str]] = {
         QuoteStatus.CONFIRMED,
         QuoteStatus.CANCELLED,
     ],
-    QuoteStatus.CONFIRMED: [QuoteStatus.FULFILLING, QuoteStatus.CANCELLED],
+    # `confirmed -> invoiced` (Phase 3): a subscription-only order is never shipped,
+    # so it goes straight from confirmed to invoiced without passing through fulfilling.
+    QuoteStatus.CONFIRMED: [QuoteStatus.FULFILLING, QuoteStatus.INVOICED, QuoteStatus.CANCELLED],
     QuoteStatus.FULFILLING: [QuoteStatus.INVOICED],
     QuoteStatus.INVOICED: [QuoteStatus.PAID],
     QuoteStatus.PAID: [],
@@ -256,6 +301,8 @@ _ENUM_GROUPS: dict[str, type[StrEnum]] = {
     "invoice_status": InvoiceStatus,
     "document_type": DocumentType,
     "alert_type": AlertType,
+    "billing_schedule_status": BillingScheduleStatus,
+    "dashboard_type": DashboardType,
 }
 
 _OVERRIDES: dict[str, dict[str, str]] = {

@@ -1,6 +1,7 @@
 from sqlalchemy import JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.enums import DashboardType
 from app.db.base import Base, OrgScopedMixin, TimestampMixin
 
 
@@ -14,3 +15,9 @@ class Role(Base, TimestampMixin, OrgScopedMixin):
     description: Mapped[str | None] = mapped_column(String(255))
     # Plain permission strings, e.g. ["users:read", "users:write"]. "*" grants everything.
     permissions: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    # Which dashboard layout the frontend renders for users holding this role —
+    # see app/core/enums.py::DashboardType. Set on the Roles screen; purely a
+    # presentation choice, RBAC still gates every dashboard endpoint.
+    dashboard_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, default=DashboardType.GENERIC.value
+    )
