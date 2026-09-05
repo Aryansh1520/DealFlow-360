@@ -120,6 +120,7 @@ class QuotationRead(BaseModel):
     version: int
     policy_version: int
     currency: str
+    order_discount_bps: Bps
     valid_until: date | None
     lines: list[QuoteLineRead]
     computation: QuoteComputation
@@ -206,4 +207,9 @@ class SubmitRequest(BaseModel):
 class TransitionRequest(BaseModel):
     expected_version: int
     to_status: str
+    reason: str | None = None
+
+
+class RejectCounterRequest(BaseModel):
+    expected_version: int
     reason: str | None = None

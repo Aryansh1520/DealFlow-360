@@ -370,6 +370,16 @@ function CounterCard({
   const [sent, setSent] = React.useState(false);
   const counter = usePortalCounter(quote.id);
 
+  // Did the rep decline the most recent counter-offer? (timeline is oldest→newest)
+  const lastCountered = [...quote.timeline]
+    .reverse()
+    .find((e) => e.event_type === "quote.customer_countered");
+  const declinedAfterLastCounter =
+    !!lastCountered &&
+    quote.timeline.some(
+      (e) => e.event_type === "quote.counter_rejected" && e.created_at > lastCountered.created_at
+    );
+
   // Always render a same-size peer of "Ready to go ahead?" — when negotiation
   // isn't open, the card explains why instead of disappearing.
   if (!quote.can_counter) {
@@ -418,6 +428,14 @@ function CounterCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1">
+        {declinedAfterLastCounter && !sent && (
+          <Alert className="mb-3">
+            <AlertDescription>
+              Your rep reviewed your last request and kept the current terms. You can send
+              another counter-offer below, or confirm the quotation as it stands.
+            </AlertDescription>
+          </Alert>
+        )}
         <form
           className="space-y-3"
           onSubmit={(e) => {

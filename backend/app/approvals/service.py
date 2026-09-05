@@ -87,14 +87,33 @@ def submit(db: Session, quotation: Quotation, actor: User, expected_version: int
     return quotation
 
 
+# Statuses in which a quote's terms are committed / customer-visible: any change
+# to lines or the order discount must be re-evaluated by the engine, so protections
+# (ceilings, risk routing) can't be walked past one small counter-offer at a time.
+_REVALIDATE_STATUSES = {
+    QuoteStatus.APPROVED.value,
+    QuoteStatus.SENT.value,
+    QuoteStatus.UNDER_NEGOTIATION.value,
+}
+
+
 def revalidate_after_line_change(db: Session, quotation: Quotation, actor: User | Customer) -> None:
-    """The golden rule: once a quote has an `approved_line_hash`, any line change
-    that alters it skips every non-terminal approval and re-routes the quote through
-    the same submission logic. See `DECISION_ENGINE.md` §8."""
+    """The golden rule: once a quote's terms are committed, any change to a line or
+    the order-level discount that alters the fingerprint skips every non-terminal
+    approval and re-routes the quote through the same submission logic. See
+    `DECISION_ENGINE.md` §8.
+
+    `approved_line_hash` is the fingerprint of the terms last signed off through the
+    routing engine. It's `None` for a quote that never went through routing (a
+    seeded fixture, a direct `draft -> approved` transition). For those, we still
+    re-route on any change *if* the quote is already committed/customer-visible —
+    otherwise a discount could be nudged past policy across several counter-offers
+    without ever tripping approval. A `draft` / `returned_for_revision` quote has
+    nothing to protect yet, so it's left alone until it's submitted."""
     if quotation.approved_line_hash is None:
-        return
-    new_hash = line_hash(quotation)
-    if new_hash == quotation.approved_line_hash:
+        if quotation.status not in _REVALIDATE_STATUSES:
+            return
+    elif line_hash(quotation) == quotation.approved_line_hash:
         return
 
     pending = db.scalars(

@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { BpsInput } from "@/components/ui/bps-input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Money } from "@/components/ui/money";
 import { Separator } from "@/components/ui/separator";
@@ -34,6 +35,7 @@ import {
   useSubmitQuotation,
   useTransitionQuotation,
   useUpdateLine,
+  useUpdateQuotation,
 } from "@/features/quotations/hooks";
 import { useQuotePreview } from "@/features/quotations/use-preview";
 
@@ -56,8 +58,13 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
 
   // Manual escape hatch — one click re-pulls the quote, its timeline, the
   // suggestions and the decision trace (all keyed under ["quotations", id]).
+  // `refetchType: "all"` so it's never weaker than the live SSE path (which uses
+  // the same) — a collapsed panel or an unfocused tab still re-pulls.
   const handleRefresh = React.useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["quotations", quotationId] });
+    queryClient.invalidateQueries({
+      queryKey: ["quotations", quotationId],
+      refetchType: "all",
+    });
   }, [queryClient, quotationId]);
 
   const [editorState, dispatch] = React.useReducer(
@@ -83,15 +90,30 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
   const removeLine = useRemoveLine(quotationId);
   const submit = useSubmitQuotation(quotationId);
   const transition = useTransitionQuotation(quotationId);
+  const updateQuotation = useUpdateQuotation(quotationId);
 
   const [traceOpen, setTraceOpen] = React.useState(false);
   const [confirmSubmitOpen, setConfirmSubmitOpen] = React.useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = React.useState(false);
+  const [confirmSendOpen, setConfirmSendOpen] = React.useState(false);
+
+  // The customer's counter-offer stages its requested discount here rather than
+  // auto-applying — the rep confirms and commits it themselves.
+  const orderDiscountRef = React.useRef<HTMLInputElement>(null);
+  const stageOrderDiscount = React.useCallback((requestedBps: number) => {
+    dispatch({ type: "set_order_discount", discountBps: requestedBps });
+    requestAnimationFrame(() => {
+      orderDiscountRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      orderDiscountRef.current?.focus();
+    });
+  }, []);
 
   const submitIntentId = quotation ? `submit-${quotation.id}-${quotation.version}` : "submit";
   const submitIdemKey = useIdempotencyKey(submitIntentId);
   const cancelIntentId = quotation ? `cancel-${quotation.id}-${quotation.version}` : "cancel";
   const cancelIdemKey = useIdempotencyKey(cancelIntentId);
+  const sendIntentId = quotation ? `send-${quotation.id}-${quotation.version}` : "send";
+  const sendIdemKey = useIdempotencyKey(sendIntentId);
 
   if (isLoading || !quotation) {
     return (
@@ -123,6 +145,16 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
   const isPendingApproval = quotation.status === "pending_l1" || quotation.status === "pending_l2";
   const canCancel = allowedTransitions.includes("cancelled");
   const canSubmit = quotation.status === "draft" || quotation.status === "returned_for_revision";
+  const canSend = allowedTransitions.includes("sent");
+
+  const orderDiscountDirty = editorState.orderDiscountBps !== quotation.order_discount_bps;
+  const commitOrderDiscount = () => {
+    if (editorState.orderDiscountBps === quotation.order_discount_bps) return;
+    updateQuotation.mutate({
+      expected_version: quotation.version,
+      order_discount_bps: editorState.orderDiscountBps,
+    });
+  };
 
   const handleAddProduct = (product: ProductRead) => {
     addLine.mutate({
@@ -180,6 +212,15 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
       })
       .catch(() => {});
 
+  const handleSend = () =>
+    transition
+      .mutateAsync({
+        toStatus: "sent",
+        expectedVersion: quotation.version,
+        idempotencyKey: sendIdemKey,
+      })
+      .catch(() => {});
+
   // The quotation header (reference, customer, headline amount) and the submit /
   // cancel actions are handed to <TotalsBlock> as its `header` / `footer` so the
   // amount and the live totals read as one card.
@@ -201,7 +242,7 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
   );
 
   const summaryFooter =
-    canSubmit || canCancel ? (
+    canSubmit || canSend || canCancel ? (
       <div className="mt-auto flex shrink-0 flex-col gap-2 pt-2">
         {canSubmit && (
           <Button
@@ -210,6 +251,12 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
           >
             <Send className="h-4 w-4" />
             Submit for Approval
+          </Button>
+        )}
+        {canSend && (
+          <Button onClick={() => setConfirmSendOpen(true)}>
+            <Send className="h-4 w-4" />
+            Send to Customer
           </Button>
         )}
         {canCancel && (
@@ -268,7 +315,7 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
 
       <QuotationTabs quotationId={quotationId} />
 
-      <CounterRequestBanner quotation={quotation} />
+      <CounterRequestBanner quotation={quotation} onStageOrderDiscount={stageOrderDiscount} />
 
       {!editable && quotation.status.startsWith("pending_") && (
         <Alert>
@@ -302,6 +349,52 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
             </div>
           )}
           {lineTable(editable ? "shrink-0 lg:h-[22rem]" : "shrink-0 lg:h-[41rem]")}
+          {editable && (
+            <div className="flex shrink-0 flex-col gap-2 rounded-lg border bg-card p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold">Order discount</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Applied across every line, on top of any per-line discount. Changing it
+                    re-checks approval.
+                  </p>
+                </div>
+                <div className="w-28 shrink-0">
+                  <BpsInput
+                    ref={orderDiscountRef}
+                    value={editorState.orderDiscountBps}
+                    onChange={(bps) => dispatch({ type: "set_order_discount", discountBps: bps })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitOrderDiscount();
+                      }
+                    }}
+                    aria-label="Order-level discount percentage"
+                  />
+                </div>
+              </div>
+              {orderDiscountDirty && (
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      dispatch({
+                        type: "set_order_discount",
+                        discountBps: quotation.order_discount_bps,
+                      })
+                    }
+                  >
+                    Reset
+                  </Button>
+                  <Button size="sm" disabled={updateQuotation.isPending} onClick={commitOrderDiscount}>
+                    Apply order discount
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex min-h-0 shrink-0 flex-col rounded-lg border bg-card p-4 shadow-sm lg:h-80">
             <h2 className="mb-2 text-sm font-semibold">Activity</h2>
             <Separator className="mb-3" />
@@ -348,6 +441,15 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
         confirmLabel="Cancel quotation"
         variant="destructive"
         onConfirm={handleCancel}
+        isPending={transition.isPending}
+      />
+      <ConfirmDialog
+        open={confirmSendOpen}
+        onOpenChange={setConfirmSendOpen}
+        title="Send this quotation to the customer?"
+        description="They'll get a portal link and can confirm the current terms or send a counter-offer."
+        confirmLabel="Send"
+        onConfirm={handleSend}
         isPending={transition.isPending}
       />
     </div>

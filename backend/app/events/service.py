@@ -61,13 +61,14 @@ def record_event(
 
     try:
         publish_event(
+            db,
             quotation_id=quotation.id,
             org_id=quotation.org_id,
             event_type=resolved_type,
             payload={"reference": quotation.reference, "status": quotation.status},
         )
     except Exception:  # a live-channel hiccup must never break a core mutation
-        logger.exception("SSE publish failed for quotation %s", quotation.id)
+        logger.exception("SSE publish buffering failed for quotation %s", quotation.id)
 
     return event
 

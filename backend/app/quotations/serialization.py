@@ -109,6 +109,7 @@ def to_quotation_read(db: Session, quotation: Quotation) -> QuotationRead:
         version=quotation.version,
         policy_version=quotation.policy_version,
         currency=quotation.currency,
+        order_discount_bps=quotation.order_discount_bps,
         valid_until=quotation.valid_until,
         lines=line_reads,
         computation=computation,

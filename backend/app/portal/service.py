@@ -193,10 +193,19 @@ def confirm(
         payload={},
     )
 
-    # Confirming from `approved` means the terms were already signed off (the
-    # customer's earlier confirm re-entered approval and it came back out). No need
-    # to re-run the routing — go straight to confirmed.
-    if quotation.status == QuoteStatus.APPROVED.value:
+    # Confirming from `approved` goes straight to `confirmed` **only** if the terms
+    # are still exactly what was signed off — `line_hash` (lines + order discount)
+    # must match `approved_line_hash`. If a rep has nudged the discount since (even
+    # a little, even across several counter-offers), the fingerprint won't match and
+    # we fall through to re-run the engine, so the current position can't skip
+    # approval just because the status still reads `approved`.
+    from app.quotations.service import line_hash
+
+    terms_match_approval = (
+        quotation.approved_line_hash is not None
+        and line_hash(quotation) == quotation.approved_line_hash
+    )
+    if quotation.status == QuoteStatus.APPROVED.value and terms_match_approval:
         transition(
             db, quotation, QuoteStatus.CONFIRMED.value, customer, expected_version=quotation.version
         )
@@ -206,10 +215,10 @@ def confirm(
 
     computation = compute_quotation(db, quotation)
     if computation.required_approvals:
-        # Needs sign-off again → route through the same submission logic. From `sent`
-        # the state machine has no direct edge to `pending_*`, so hop via
+        # Needs sign-off again → route through the same submission logic. Neither
+        # `sent` nor `approved` has a direct edge to `pending_*`, so hop via
         # `under_negotiation` first.
-        if quotation.status == QuoteStatus.SENT.value:
+        if quotation.status in (QuoteStatus.SENT.value, QuoteStatus.APPROVED.value):
             transition(
                 db,
                 quotation,

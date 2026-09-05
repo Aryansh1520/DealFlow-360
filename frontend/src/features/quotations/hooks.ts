@@ -74,6 +74,25 @@ export function useUpdateQuotation(id: number) {
   });
 }
 
+/** Rep declines the customer's counter-offer — records `quote.counter_rejected`
+ * (visible in the portal timeline) and keeps the current terms. */
+export function useRejectCounter(id: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { expected_version: number; reason?: string }) =>
+      quotationsApi.rejectCounter(id, payload),
+    onSuccess: (quotation) => {
+      queryClient.setQueryData([QUOTATIONS_KEY, id], quotation);
+      queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "events"] });
+      queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY] });
+      toast.success("Counter-offer declined — the customer has been notified.");
+    },
+    onError: (error) => {
+      if (!onVersionConflict(queryClient, id, error)) toast.error(getErrorMessage(error));
+    },
+  });
+}
+
 export function useAddLine(id: number) {
   const queryClient = useQueryClient();
   return useMutation({

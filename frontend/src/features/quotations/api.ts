@@ -117,6 +117,14 @@ export const quotationsApi = {
     return data;
   },
 
+  rejectCounter: async (
+    id: number,
+    payload: { expected_version: number; reason?: string }
+  ): Promise<QuotationRead> => {
+    const { data } = await apiClient.post<QuotationRead>(`/quotations/${id}/counter/reject`, payload);
+    return data;
+  },
+
   events: async (id: number, params: ListParams): Promise<Page<QuoteEventRead>> => {
     const { data } = await apiClient.get<Page<QuoteEventRead>>(`/quotations/${id}/events`, {
       params,

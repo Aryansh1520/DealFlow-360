@@ -27,6 +27,7 @@ from app.quotations.schemas import (
     QuotationCreate,
     QuotationRead,
     QuotationUpdate,
+    RejectCounterRequest,
     SubmitRequest,
     SuggestionRead,
     TransitionRequest,
@@ -180,6 +181,19 @@ async def transition_quotation(
     )
     db.commit()
     return response
+
+
+@router.post(
+    "/{quotation_id}/counter/reject",
+    response_model=SuccessResponse[QuotationRead],
+    dependencies=[QuotationsWrite],
+)
+def reject_counter(quotation_id: int, payload: RejectCounterRequest, db: DbSession, current_user: CurrentUser):
+    quotation = service.get_quotation_or_404(db, quotation_id)
+    updated = service.reject_counter(
+        db, quotation, current_user, expected_version=payload.expected_version, reason=payload.reason
+    )
+    return ok(to_quotation_read(db, updated), "Counter-offer declined; the customer has been notified.")
 
 
 @router.get(

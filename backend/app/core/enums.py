@@ -93,6 +93,7 @@ class EventType(StrEnum):
     QUOTE_CUSTOMER_VIEWED = "quote.customer_viewed"
     QUOTE_CUSTOMER_COMMENTED = "quote.customer_commented"
     QUOTE_CUSTOMER_COUNTERED = "quote.customer_countered"
+    QUOTE_COUNTER_REJECTED = "quote.counter_rejected"
     QUOTE_CUSTOMER_CONFIRMED = "quote.customer_confirmed"
     QUOTE_UPSELL_ADDED = "quote.upsell_added"
     QUOTE_UPSELL_DISMISSED = "quote.upsell_dismissed"

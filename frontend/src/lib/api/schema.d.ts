@@ -736,6 +736,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/quotations/{quotation_id}/counter/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject Counter */
+        post: operations["reject_counter_api_v1_quotations__quotation_id__counter_reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quotations/{quotation_id}/events": {
         parameters: {
             query?: never;
@@ -2889,6 +2906,8 @@ export interface components {
             policy_version: number;
             /** Currency */
             currency: string;
+            /** Order Discount Bps */
+            order_discount_bps: number;
             /** Valid Until */
             valid_until: string | null;
             /** Lines */
@@ -3076,6 +3095,13 @@ export interface components {
             password: string;
             /** Full Name */
             full_name: string;
+        };
+        /** RejectCounterRequest */
+        RejectCounterRequest: {
+            /** Expected Version */
+            expected_version: number;
+            /** Reason */
+            reason?: string | null;
         };
         /** RoleCreate */
         RoleCreate: {
@@ -6627,6 +6653,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["TransitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_QuotationRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_counter_api_v1_quotations__quotation_id__counter_reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quotation_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectCounterRequest"];
             };
         };
         responses: {

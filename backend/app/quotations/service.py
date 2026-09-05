@@ -47,12 +47,15 @@ _LOCKED_STATUSES = {
 
 
 def line_hash(quotation: Quotation) -> str:
-    """Over `(product_id, variant_id, quantity, discount_bps)`, sorted — the golden
-    rule's fingerprint. See `DECISION_ENGINE.md` §8 and `BACKEND_PHASE_2.md` Task 6."""
+    """Over `(product_id, variant_id, quantity, discount_bps)` per line, sorted, plus
+    the order-level discount — the golden rule's fingerprint. See `DECISION_ENGINE.md`
+    §8 and `BACKEND_PHASE_2.md` Task 6. `order_discount_bps` is in the hash so that
+    changing it on an approved quote re-routes for review just like a line change does."""
     items = sorted(
         (line.product_id, line.variant_id or 0, line.quantity, line.discount_bps) for line in quotation.lines
     )
-    return hashlib.sha256(json.dumps(items).encode()).hexdigest()
+    payload = {"lines": items, "order_discount_bps": quotation.order_discount_bps}
+    return hashlib.sha256(json.dumps(payload).encode()).hexdigest()
 
 
 def _ensure_editable(quotation: Quotation) -> None:
@@ -199,7 +202,8 @@ def update_quotation(db: Session, quotation: Quotation, payload: QuotationUpdate
         payload.order_discount_bps if payload.order_discount_bps is not None else quotation.order_discount_bps
     )
     changes: list[str] = []
-    if new_order_discount != quotation.order_discount_bps:
+    order_discount_changed = new_order_discount != quotation.order_discount_bps
+    if order_discount_changed:
         computation = evaluate_raw_lines(db, quotation, raw_lines_from_saved(quotation), new_order_discount)
         _reject_if_blocked(computation)
         changes.append(f"order discount from {quotation.order_discount_bps / 100:.1f}% to {new_order_discount / 100:.1f}%")
@@ -221,7 +225,60 @@ def update_quotation(db: Session, quotation: Quotation, payload: QuotationUpdate
         summary=f"{actor.full_name} changed " + " and ".join(changes) + ".",
         payload={"order_discount_bps": quotation.order_discount_bps},
     )
-    _revalidate_approvals(db, quotation, actor)
+
+    # A discount change on a quote the customer is already holding reopens
+    # negotiation — they aren't left staring at stale terms, and the rep has an
+    # explicit re-send step. `sent -> under_negotiation` is a legal edge.
+    if order_discount_changed and quotation.status == QuoteStatus.SENT.value:
+        from app.quotations.transitions import transition  # local: avoids an import cycle
+
+        transition(
+            db,
+            quotation,
+            QuoteStatus.UNDER_NEGOTIATION.value,
+            actor,
+            expected_version=quotation.version,
+        )
+
+    # Re-run the engine only when pricing actually moved (a discount change), not
+    # for a valid-until edit. `revalidate_after_line_change` re-routes for approval
+    # if the new *absolute* terms breach policy — so a discount can't be walked past
+    # the ceiling one counter-offer at a time.
+    if order_discount_changed:
+        _revalidate_approvals(db, quotation, actor)
+    db.commit()
+    db.refresh(quotation)
+    return quotation
+
+
+def reject_counter(
+    db: Session, quotation: Quotation, actor: User, *, expected_version: int, reason: str | None
+) -> Quotation:
+    """The rep reviewed the customer's counter-offer and is keeping the current terms.
+    Records a `quote.counter_rejected` event (visible in the portal timeline) so the
+    customer is told. Deliberately does not change status — the quote stays
+    `under_negotiation` and the customer may counter again or confirm as-is."""
+    _check_version(db, quotation, expected_version)
+
+    if quotation.status not in {QuoteStatus.SENT.value, QuoteStatus.UNDER_NEGOTIATION.value}:
+        raise ConflictException(
+            f"Quotation '{quotation.reference}' is {quotation.status} — there is no open "
+            "counter-offer to decline.",
+            code=ErrorCode.ILLEGAL_TRANSITION,
+        )
+
+    note = (reason or "").strip()
+    record_event(
+        db,
+        quotation,
+        EventType.QUOTE_COUNTER_REJECTED,
+        actor,
+        summary=(
+            "Sales team reviewed the counter-offer and kept the current terms."
+            + (f' Reason: "{note}"' if note else "")
+        ),
+        payload={"reason": reason},
+    )
     db.commit()
     db.refresh(quotation)
     return quotation

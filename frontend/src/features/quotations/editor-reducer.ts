@@ -11,7 +11,7 @@ type EditorAction =
 
 export function quotationToEditorState(quotation: QuotationRead): EditorState {
   return {
-    orderDiscountBps: 0,
+    orderDiscountBps: quotation.order_discount_bps ?? 0,
     lines: quotation.lines.map((line) => ({
       key: String(line.id),
       lineId: line.id,

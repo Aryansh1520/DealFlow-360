@@ -32,6 +32,7 @@ PORTAL_VISIBLE_EVENT_TYPES = {
     "quote.customer_viewed",
     "quote.customer_commented",
     "quote.customer_countered",
+    "quote.counter_rejected",
     "quote.customer_confirmed",
     "quote.invoiced",
     "quote.payment_recorded",

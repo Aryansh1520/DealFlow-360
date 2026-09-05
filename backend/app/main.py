@@ -1,4 +1,3 @@
-import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,7 +9,6 @@ from app.config.settings import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.middleware import register_middleware
 from app.core.storage import ensure_bucket
-from app.events.stream import set_event_loop
 from app.jobs.scheduler import shutdown_scheduler, start_scheduler
 
 setup_logging()
@@ -22,9 +20,6 @@ async def lifespan(app: FastAPI):
     # DB seeding runs once in docker-entrypoint.sh before the workers start —
     # doing it here would race across `uvicorn --workers N`.
     ensure_bucket()
-    # The SSE bus publishes from sync worker threads via call_soon_threadsafe, so it
-    # needs a handle on the running loop.
-    set_event_loop(asyncio.get_running_loop())
     start_scheduler()
     try:
         yield
