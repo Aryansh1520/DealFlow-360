@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/auth-context";
 import { navItems, type NavItem } from "@/components/layout/nav-items";
 
+const isProduction = process.env.NODE_ENV === "production";
+
 function isItemActive(item: NavItem, pathname: string): boolean {
   if (item.href) {
     return pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -16,14 +18,19 @@ function isItemActive(item: NavItem, pathname: string): boolean {
   return (item.children ?? []).some((child) => isItemActive(child, pathname));
 }
 
-/** Recursively drops items the user lacks permission for, pruning groups left empty. */
+/**
+ * Recursively drops items the user lacks permission for, pruning groups left
+ * empty. A `comingInPhase` item is dropped outright in production — it hasn't
+ * shipped — but kept (disabled) in dev so the nav tree can be demoed early.
+ */
 function filterVisible(items: NavItem[], hasPermission: (...p: string[]) => boolean): NavItem[] {
   return items
     .filter((item) => !item.permissions || hasPermission(...item.permissions))
+    .filter((item) => !isProduction || !item.comingInPhase)
     .map((item) =>
       item.children ? { ...item, children: filterVisible(item.children, hasPermission) } : item
     )
-    .filter((item) => !item.children || item.children.length > 0);
+    .filter((item) => item.href || item.comingInPhase || (item.children?.length ?? 0) > 0);
 }
 
 export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
@@ -95,10 +102,29 @@ function NavEntry({
     );
   }
 
+  // Not yet built: no href, rendered disabled with a tooltip explaining why.
+  if (!item.href) {
+    return (
+      <span
+        title={item.comingInPhase ? `Coming in Phase ${item.comingInPhase}` : undefined}
+        className="flex cursor-not-allowed items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/30"
+      >
+        <item.icon className="h-4 w-4 shrink-0" />
+        {item.title}
+        {item.comingInPhase && (
+          <span className="ml-auto rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+            Phase {item.comingInPhase}
+          </span>
+        )}
+      </span>
+    );
+  }
+
   return (
     <Link
-      href={item.href!}
+      href={item.href}
       onClick={onNavigate}
+      title={item.comingInPhase ? `Coming in Phase ${item.comingInPhase}` : undefined}
       className={cn(
         "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
         active
@@ -108,6 +134,11 @@ function NavEntry({
     >
       <item.icon className="h-4 w-4 shrink-0" />
       {item.title}
+      {item.comingInPhase && (
+        <span className="ml-auto rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-sidebar-foreground/50">
+          Phase {item.comingInPhase}
+        </span>
+      )}
     </Link>
   );
 }

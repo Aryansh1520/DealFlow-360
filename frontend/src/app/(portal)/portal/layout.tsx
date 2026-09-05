@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { AuthGuard } from "@/features/auth/components/auth-guard";
 import { PortalGuard } from "@/features/auth/components/portal-guard";
 import { useAuth } from "@/features/auth/auth-context";
+import { ContractVersionBanner } from "@/components/layout/contract-version-banner";
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,6 +24,7 @@ function PortalShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-muted/30">
+      <ContractVersionBanner />
       <header className="flex items-center justify-between border-b bg-background px-4 py-3 md:px-8">
         <div>
           <p className="text-sm font-semibold">{APP_NAME} · Customer Portal</p>

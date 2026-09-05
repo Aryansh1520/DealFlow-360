@@ -33,6 +33,23 @@
     --radius: 0.5rem;
 
     /*
+     * The four semantic tones — `FRONTEND_PHASE_1.md` Task 6. Every badge, trace
+     * row and alert uses exactly these; nothing else gets a colour.
+     *   positive: margin healthy / approved / within limit
+     *   warning:  over ceiling / pending / needs attention
+     *   danger:   breach / rejected / destructive
+     *   info:     pending / neutral in-progress state
+     */
+    --positive: 142 71% 32%;
+    --positive-foreground: 0 0% 98%;
+    --warning: 38 92% 42%;
+    --warning-foreground: 0 0% 98%;
+    --danger: 0 72% 51%;
+    --danger-foreground: 0 0% 98%;
+    --info: 217 91% 54%;
+    --info-foreground: 0 0% 98%;
+
+    /*
      * Sidebar / nav-chrome tokens — intentionally a fixed dark surface in both
      * light and dark mode, so the app shell reads as "chrome" distinct from
      * whatever theme the content area is in. Defined once, not overridden below.
@@ -67,6 +84,15 @@
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
+
+    --positive: 142 64% 42%;
+    --positive-foreground: 144 61% 8%;
+    --warning: 38 92% 55%;
+    --warning-foreground: 32 81% 10%;
+    --danger: 0 72% 58%;
+    --danger-foreground: 0 0% 98%;
+    --info: 217 91% 65%;
+    --info-foreground: 222 47% 8%;
   }
 }
 

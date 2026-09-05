@@ -5,11 +5,10 @@ import { ChevronLeft, ChevronRight, MoreHorizontal, Plus, Search } from "lucide-
 
 import { getErrorMessage } from "@/lib/api-client";
 import { useDebounce } from "@/lib/use-debounce";
-import { getInitials } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Money } from "@/components/ui/money";
 import {
   Select,
   SelectContent,
@@ -34,67 +34,62 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useAuth } from "@/features/auth/auth-context";
-import type { Customer } from "@/features/auth/types";
-import { useEnums } from "@/features/meta/hooks";
-import { useCustomers } from "@/features/customers/hooks";
-import { DeleteCustomerDialog } from "@/features/customers/components/delete-customer-dialog";
-import { CustomerFormDialog } from "@/features/customers/components/customer-form-dialog";
+import type { ProductRead } from "@/lib/api/types";
+import { ProductFormDialog } from "@/features/catalog/components/product-form-dialog";
+import { useCategories, useDeleteProduct, useProducts } from "@/features/catalog/hooks";
 
 const PAGE_SIZE = 10;
-const ALL_TIERS = "all";
+const ALL = "all";
 
-const TIER_VARIANT = {
-  gold: "default",
-  silver: "secondary",
-  bronze: "outline",
-} as const;
-
-export function CustomersTable() {
+export function ProductsTable() {
   const { hasPermission } = useAuth();
-  const canWrite = hasPermission("customers:write");
-  const { data: enums } = useEnums();
+  const canWrite = hasPermission("catalog:write");
+  const canSeeCost = canWrite;
 
   const [page, setPage] = React.useState(1);
   const [searchInput, setSearchInput] = React.useState("");
   const search = useDebounce(searchInput);
-  const [tierFilter, setTierFilter] = React.useState<string>(ALL_TIERS);
+  const [categoryFilter, setCategoryFilter] = React.useState<string>(ALL);
 
   const [formOpen, setFormOpen] = React.useState(false);
-  const [editingCustomer, setEditingCustomer] = React.useState<Customer | null>(null);
-  const [deletingCustomer, setDeletingCustomer] = React.useState<Customer | null>(null);
+  const [editingProduct, setEditingProduct] = React.useState<ProductRead | null>(null);
+  const [deletingProduct, setDeletingProduct] = React.useState<ProductRead | null>(null);
 
-  const { data, isLoading, isError, error } = useCustomers({
+  const { data: categoriesPage } = useCategories();
+  const { data, isLoading, isError, error } = useProducts({
     page,
     page_size: PAGE_SIZE,
     search: search || undefined,
-    tier: tierFilter === ALL_TIERS ? undefined : (tierFilter as Customer["tier"]),
+    category_id: categoryFilter === ALL ? undefined : Number(categoryFilter),
     sort_by: "created_at",
     sort_order: "desc",
   });
+  const deleteProduct = useDeleteProduct();
 
-  // Snap back when a search or filter shrinks the result set below the current page
   React.useEffect(() => {
     setPage(1);
-  }, [search, tierFilter]);
+  }, [search, categoryFilter]);
 
   const openCreate = () => {
-    setEditingCustomer(null);
+    setEditingProduct(null);
     setFormOpen(true);
   };
 
-  const openEdit = (customer: Customer) => {
-    setEditingCustomer(customer);
+  const openEdit = (product: ProductRead) => {
+    setEditingProduct(product);
     setFormOpen(true);
   };
 
   if (isError) {
     return (
       <Alert variant="destructive">
-        <AlertTitle>Failed to load customers</AlertTitle>
+        <AlertTitle>Failed to load products</AlertTitle>
         <AlertDescription>{getErrorMessage(error)}</AlertDescription>
       </Alert>
     );
   }
+
+  const columnCount = 4 + (canSeeCost ? 1 : 0) + (canWrite ? 1 : 0);
 
   return (
     <div className="space-y-4">
@@ -103,21 +98,21 @@ export function CustomersTable() {
           <div className="relative w-full max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search customers..."
+              placeholder="Search products..."
               className="pl-9"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
             />
           </div>
-          <Select value={tierFilter} onValueChange={setTierFilter}>
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder="All tiers" />
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL_TIERS}>All tiers</SelectItem>
-              {(enums?.customer_tier ?? []).map((tier) => (
-                <SelectItem key={tier} value={tier} className="capitalize">
-                  {enums?.labels.customer_tier?.[tier] ?? tier}
+              <SelectItem value={ALL}>All categories</SelectItem>
+              {categoriesPage?.items.map((category) => (
+                <SelectItem key={category.id} value={String(category.id)}>
+                  {category.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -126,7 +121,7 @@ export function CustomersTable() {
         {canWrite && (
           <Button onClick={openCreate}>
             <Plus />
-            Add customer
+            Add product
           </Button>
         )}
       </div>
@@ -135,61 +130,53 @@ export function CustomersTable() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Customer</TableHead>
-              <TableHead>Tier</TableHead>
-              <TableHead>Portal access</TableHead>
-              <TableHead>Created</TableHead>
+              <TableHead>Product</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead className="text-right">List price</TableHead>
+              {canSeeCost && <TableHead className="text-right">Cost price</TableHead>}
               {canWrite && <TableHead className="w-[50px]" />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              Array.from({ length: 5 }).map((_, index) => (
+              Array.from({ length: 6 }).map((_, index) => (
                 <TableRow key={index}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="h-10 w-10 rounded-full" />
-                      <div className="space-y-1.5">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-44" />
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  {canWrite && <TableCell />}
+                  {Array.from({ length: columnCount }).map((__, cell) => (
+                    <TableCell key={cell}>
+                      <Skeleton className="h-4 w-20" />
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))
             ) : data && data.items.length > 0 ? (
-              data.items.map((customer) => (
-                <TableRow key={customer.id}>
+              data.items.map((product) => (
+                <TableRow key={product.id}>
                   <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback>{getInitials(customer.name)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">{customer.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {customer.company ?? customer.email}
-                        </p>
-                      </div>
+                    <p className="font-medium">{product.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {product.sku}
+                      {product.variants.length > 0 &&
+                        ` · ${product.variants.length} variant${product.variants.length > 1 ? "s" : ""}`}
+                    </p>
+                  </TableCell>
+                  <TableCell>{product.category_name}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="secondary" className="capitalize">
+                        {product.line_type.replace("_", " ")}
+                      </Badge>
+                      {product.is_promoted && <Badge variant="info">Promoted</Badge>}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant={TIER_VARIANT[customer.tier]} className="capitalize">
-                      {customer.tier}
-                    </Badge>
+                  <TableCell className="text-right">
+                    <Money minor={product.list_price_minor} currency={product.currency} />
                   </TableCell>
-                  <TableCell>
-                    <Badge variant={customer.portal_enabled ? "outline" : "destructive"}>
-                      {customer.portal_enabled ? "Enabled" : "Disabled"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(customer.created_at).toLocaleDateString()}
-                  </TableCell>
+                  {canSeeCost && (
+                    <TableCell className="text-right text-muted-foreground">
+                      <Money minor={product.cost_price_minor} currency={product.currency} />
+                    </TableCell>
+                  )}
                   {canWrite && (
                     <TableCell>
                       <DropdownMenu>
@@ -200,12 +187,12 @@ export function CustomersTable() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEdit(customer)}>
+                          <DropdownMenuItem onClick={() => openEdit(product)}>
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
-                            onClick={() => setDeletingCustomer(customer)}
+                            onClick={() => setDeletingProduct(product)}
                           >
                             Delete
                           </DropdownMenuItem>
@@ -217,8 +204,8 @@ export function CustomersTable() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={canWrite ? 5 : 4} className="h-24 text-center text-muted-foreground">
-                  No customers found.
+                <TableCell colSpan={columnCount} className="h-24 text-center text-muted-foreground">
+                  No products found.
                 </TableCell>
               </TableRow>
             )}
@@ -229,7 +216,7 @@ export function CustomersTable() {
       {data && data.pages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Page {data.page} of {data.pages} · {data.total} customers
+            Page {data.page} of {data.pages} · {data.total} products
           </p>
           <div className="flex gap-2">
             <Button
@@ -254,8 +241,20 @@ export function CustomersTable() {
         </div>
       )}
 
-      <CustomerFormDialog open={formOpen} onOpenChange={setFormOpen} customer={editingCustomer} />
-      <DeleteCustomerDialog customer={deletingCustomer} onClose={() => setDeletingCustomer(null)} />
+      <ProductFormDialog open={formOpen} onOpenChange={setFormOpen} product={editingProduct} />
+      <ConfirmDeleteDialog
+        open={Boolean(deletingProduct)}
+        onOpenChange={(open) => !open && setDeletingProduct(null)}
+        title="Delete product"
+        description={
+          <>
+            This will permanently delete <strong>{deletingProduct?.name}</strong>. This action
+            cannot be undone.
+          </>
+        }
+        onConfirm={() => deletingProduct && deleteProduct.mutateAsync(deletingProduct.id)}
+        isPending={deleteProduct.isPending}
+      />
     </div>
   );
 }

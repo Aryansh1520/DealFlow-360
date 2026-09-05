@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
-    "build": "next build",
+    "build": "openapi-typescript ../backend/openapi.json -o src/lib/api/schema.d.ts && next build",
     "start": "next start -p 3001",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "gen:api": "openapi-typescript http://localhost:8001/api/v1/openapi.json -o src/lib/api/schema.d.ts",
+    "gen:api:file": "openapi-typescript ../backend/openapi.json -o src/lib/api/schema.d.ts",
+    "check:api": "openapi-typescript ../backend/openapi.json -o src/lib/api/schema.d.ts && git diff --exit-code -- src/lib/api/schema.d.ts ../backend/openapi.json",
+    "check:money": "! grep -rn '_minor' src --include='*.ts' --include='*.tsx' | grep '/ 100' | grep -v 'src/lib/money.ts' | grep -v 'src/components/ui/money-input.tsx'"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -38,6 +42,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
+    "openapi-typescript": "^7.13.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3"
