@@ -52,6 +52,16 @@ def get_active_policy(db: Session) -> PolicySnapshot:
     return _to_snapshot(policy)
 
 
+def get_policy_snapshot_by_version(db: Session, version: int) -> PolicySnapshot:
+    """A quotation stores the `policy_version` it was evaluated under and keeps it for
+    its whole lifecycle — activating a new policy must not silently reprice a quote
+    already sitting in an approval queue. See `DECISION_ENGINE.md` §8."""
+    policy = db.scalar(select(DiscountPolicy).where(DiscountPolicy.version == version))
+    if policy is None:
+        raise NotFoundException(f"Policy version {version} not found")
+    return _to_snapshot(policy)
+
+
 def get_next_version(db: Session) -> int:
     max_version = db.scalar(select(DiscountPolicy.version).order_by(DiscountPolicy.version.desc()))
     return (max_version or 0) + 1

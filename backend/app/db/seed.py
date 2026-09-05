@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.affinity.service import rebuild_affinity
 from app.catalog.models import Category, Product, ProductVariant
 from app.config.settings import settings
 from app.core.security import hash_password
@@ -18,10 +19,25 @@ from app.customers.models import Customer
 from app.policies.models import DiscountPolicy
 from app.policies.service import create_policy
 from app.pricing.models import PriceList, PriceListEntry
+from app.quotations.models import Quotation, QuoteLine
 from app.roles.models import Role
 from app.subscriptions.models import SubscriptionPlan
 from app.users.models import User
 from app.warehouses.models import Stock, Warehouse
+
+# Plausible co-purchase bundles, purely to give Phase 2's product-affinity computation
+# (an association-rule count over real `quote_lines`) something real to compute from.
+# Phase 2 scope is "compute once at seed time" — see BACKEND_PHASE_2.md Task 7.
+AFFINITY_BUNDLES: list[tuple[str, ...]] = [
+    ("LAP-PRO-14", "SVC-SETUP", "ACC-MOUSE", "ACC-HUB"),
+    ("DSK-X1", "ACC-KEYBOARD", "ACC-MOUSE"),
+    ("SVR-RACK-42U", "SVC-INSTALL", "SUB-SUPPORT-STD"),
+    ("SWT-24P", "SVC-INSTALL"),
+    ("LAP-PRO-14", "SUB-SUPPORT-PREM"),
+    ("MON-27", "ACC-MOUSE", "ACC-KEYBOARD"),
+    ("LAP-PRO-14", "ACC-MOUSE", "ACC-HUB"),
+    ("DSK-X1", "SVC-SETUP", "ACC-KEYBOARD"),
+]
 
 logger = logging.getLogger(__name__)
 
@@ -438,6 +454,67 @@ def _seed_policy(db: Session, categories: dict[str, Category]) -> None:
     logger.info("Seeded and activated discount policy version %d", policy.version)
 
 
+def _seed_historical_quotations_and_affinity(db: Session) -> None:
+    """Synthetic, terminal ("paid") historical orders — real `quote_lines` rows for
+    `rebuild_affinity` to compute real co-purchase statistics from, rather than
+    starting the upsell panel empty. Runs once: skipped the moment any quotation
+    (synthetic or a real user's) already exists."""
+    if db.scalar(select(Quotation)) is not None:
+        return
+
+    rep = db.scalar(select(User).where(User.email == "rep@example.com"))
+    customers = db.scalars(select(Customer)).all()
+    products_by_sku = {p.sku: p for p in db.scalars(select(Product)).all()}
+    policy = db.scalar(select(DiscountPolicy).where(DiscountPolicy.is_active.is_(True)))
+    if rep is None or not customers or policy is None:
+        return
+
+    created = 0
+    for i in range(24):
+        bundle = AFFINITY_BUNDLES[i % len(AFFINITY_BUNDLES)]
+        customer = customers[i % len(customers)]
+        quotation = Quotation(
+            reference="PENDING",
+            customer_id=customer.id,
+            owner_rep_id=rep.id,
+            status="paid",
+            version=1,
+            policy_version=policy.version,
+            order_discount_bps=0,
+            currency="INR",
+        )
+        db.add(quotation)
+        db.flush()
+        quotation.reference = f"QT-2025-{quotation.id:06d}"
+
+        for position, sku in enumerate(bundle):
+            product = products_by_sku.get(sku)
+            if product is None:
+                continue
+            db.add(
+                QuoteLine(
+                    quotation_id=quotation.id,
+                    product_id=product.id,
+                    variant_id=None,
+                    category_id=product.category_id,
+                    line_type=product.line_type,
+                    subscription_plan_id=product.subscription_plan_id,
+                    quantity=1,
+                    unit_price_minor=product.list_price_minor,
+                    cost_price_minor=product.cost_price_minor,
+                    discount_bps=0,
+                    added_from_suggestion=False,
+                    position=position,
+                )
+            )
+        created += 1
+    db.commit()
+    logger.info("Seeded %d historical quotations for affinity computation", created)
+
+    affinity_rows = rebuild_affinity(db)
+    logger.info("Rebuilt product affinity: %d rows", affinity_rows)
+
+
 def seed_db(db: Session) -> None:
     _seed_roles(db)
     _seed_users(db)
@@ -447,6 +524,7 @@ def seed_db(db: Session) -> None:
     _seed_warehouses(db)
     _seed_subscription_plans(db)
     _seed_policy(db, categories)
+    _seed_historical_quotations_and_affinity(db)
 
 
 if __name__ == "__main__":
@@ -463,6 +541,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.reset:
+        # `Base.metadata` only knows about tables whose model module has actually been
+        # imported somewhere in this process — without these, `drop_all` can't see
+        # (e.g.) `quote_approvals`'s FK to `quotations` and tries to drop out of order.
+        from app.affinity import models as _affinity_models  # noqa: F401
+        from app.approvals import models as _approvals_models  # noqa: F401
+        from app.core import idempotency as _idempotency_models  # noqa: F401
+        from app.events import models as _events_models  # noqa: F401
+
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
 

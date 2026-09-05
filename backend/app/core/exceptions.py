@@ -91,6 +91,16 @@ def _error_response(
 
 
 def register_exception_handlers(app: FastAPI) -> None:
+    from app.core.idempotency import IdempotencyReplay
+
+    @app.exception_handler(IdempotencyReplay)
+    async def idempotency_replay_handler(request: Request, exc: IdempotencyReplay) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.response_json,
+            headers={"X-Idempotency-Replay": "true"},
+        )
+
     @app.exception_handler(AppException)
     async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
         return _error_response(exc.status_code, exc.message, exc.code, exc.extra)
