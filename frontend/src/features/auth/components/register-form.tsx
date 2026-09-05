@@ -32,6 +32,7 @@ import { useAuth } from "@/features/auth/auth-context";
 
 const registerSchema = z
   .object({
+    organization_name: z.string().min(1, "Organization name is required"),
     full_name: z.string().min(1, "Name is required"),
     email: z.string().email("Enter a valid email address"),
     password: z.string().min(8, "Password must be at least 8 characters"),
@@ -50,12 +51,19 @@ export function RegisterForm() {
 
   const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { full_name: "", email: "", password: "", confirm_password: "" },
+    defaultValues: {
+      organization_name: "",
+      full_name: "",
+      email: "",
+      password: "",
+      confirm_password: "",
+    },
   });
 
   const onSubmit = async (values: RegisterValues) => {
     try {
       await register({
+        organization_name: values.organization_name,
         full_name: values.full_name,
         email: values.email,
         password: values.password,
@@ -69,12 +77,28 @@ export function RegisterForm() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Create an account</CardTitle>
-        <CardDescription>Enter your details to get started.</CardDescription>
+        <CardTitle>Create your organization</CardTitle>
+        <CardDescription>
+          Sign up creates a new organization with you as its administrator. To join an
+          existing organization, ask its administrator to add you.
+        </CardDescription>
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="organization_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Organization name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Acme Inc." autoComplete="organization" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="full_name"

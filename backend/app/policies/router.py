@@ -8,6 +8,7 @@ from app.core.deps import require_permissions
 from app.core.exceptions import NotFoundException
 from app.core.pagination import Page, PageParams
 from app.core.responses import SuccessResponse, ok
+from app.core.tenant_context import require_current_org
 from app.db.session import get_db
 from app.policies.models import DiscountPolicy
 from app.policies.schemas import PolicyCreate, PolicyRead
@@ -30,7 +31,11 @@ def _get_or_404(db: Session, policy_id: int) -> DiscountPolicy:
 
 @router.get("", response_model=SuccessResponse[Page[PolicyRead]], dependencies=[PoliciesRead])
 def list_policies(db: DbSession, params: Annotated[PageParams, Depends()]):
-    stmt = select(DiscountPolicy).order_by(DiscountPolicy.version.desc())
+    stmt = (
+        select(DiscountPolicy)
+        .where(DiscountPolicy.org_id == require_current_org(db))
+        .order_by(DiscountPolicy.version.desc())
+    )
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = db.scalars(
         stmt.offset((params.page - 1) * params.page_size).limit(params.page_size)

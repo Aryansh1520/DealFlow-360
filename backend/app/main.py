@@ -9,8 +9,6 @@ from app.config.settings import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.middleware import register_middleware
 from app.core.storage import ensure_bucket
-from app.db.seed import seed_db
-from app.db.session import SessionLocal
 
 setup_logging()
 
@@ -18,8 +16,8 @@ setup_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
-    with SessionLocal() as db:
-        seed_db(db)
+    # DB seeding runs once in docker-entrypoint.sh before the workers start —
+    # doing it here would race across `uvicorn --workers N`.
     ensure_bucket()
     yield
 

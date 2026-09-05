@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.enums import ErrorCode, EventType, QuoteStatus
 from app.core.exceptions import ConflictException, NotFoundException, ValidationException
 from app.core.pagination import PageParams
+from app.core.tenant_context import require_current_org
 from app.customers.models import Customer
 from app.events.service import record_event
 from app.policies.service import get_active_policy, get_policy_snapshot_by_version
@@ -132,7 +133,7 @@ def list_quotations(
     customer_id: int | None,
     q: str | None,
 ) -> tuple[list[Quotation], int]:
-    stmt = select(Quotation)
+    stmt = select(Quotation).where(Quotation.org_id == require_current_org(db))
     if status:
         stmt = stmt.where(Quotation.status == status)
     if owner_rep_id:

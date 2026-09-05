@@ -137,7 +137,14 @@ export function UsersTable() {
                         <AvatarFallback>{getInitials(user.full_name)}</AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium">{user.full_name}</p>
+                        <p className="font-medium">
+                          {user.full_name}
+                          {user.is_org_owner && (
+                            <Badge variant="secondary" className="ml-2 align-middle">
+                              Owner
+                            </Badge>
+                          )}
+                        </p>
                         <p className="text-sm text-muted-foreground">{user.email}</p>
                       </div>
                     </div>
@@ -166,6 +173,7 @@ export function UsersTable() {
                           <DropdownMenuItem onClick={() => openEdit(user)}>Edit</DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
+                            disabled={user.is_org_owner}
                             onClick={() => setDeletingUser(user)}
                           >
                             Delete

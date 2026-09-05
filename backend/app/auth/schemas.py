@@ -2,10 +2,16 @@ from pydantic import BaseModel, EmailStr, Field
 
 from app.core.security import UserType
 from app.customers.schemas import CustomerRead
+from app.organizations.schemas import OrganizationRead
 from app.users.schemas import UserRead
 
 
 class RegisterRequest(BaseModel):
+    """Self-service signup: creates a brand-new organization and its first user,
+    who becomes the organization's super admin. Not a path for adding members or
+    customers to an existing organization."""
+
+    organization_name: str = Field(min_length=1, max_length=255)
     email: EmailStr
     password: str = Field(min_length=8, max_length=72)
     full_name: str = Field(min_length=1, max_length=255)
@@ -28,11 +34,13 @@ class TokenResponse(BaseModel):
 
 
 class MeResponse(BaseModel):
-    """Discriminated on `user_type`: exactly one of `internal` / `customer` is set."""
+    """Discriminated on `user_type`: exactly one of `internal` / `customer` is set.
+    `organization` is the tenant both principal kinds belong to."""
 
     user_type: UserType
     internal: UserRead | None = None
     customer: CustomerRead | None = None
+    organization: OrganizationRead | None = None
 
 
 class MeUpdate(BaseModel):

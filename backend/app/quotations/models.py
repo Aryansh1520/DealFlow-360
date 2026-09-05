@@ -9,17 +9,19 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
     func,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base
+from app.db.base import Base, OrgScopedMixin
 
 
-class Quotation(Base):
+class Quotation(Base, OrgScopedMixin):
     __tablename__ = "quotations"
     __table_args__ = (
+        UniqueConstraint("org_id", "reference", name="uq_quotations_org_reference"),
         Index("ix_quotations_status_updated", "status", "updated_at"),
         Index("ix_quotations_owner_created", "owner_rep_id", "created_at"),
         # Tiny, hottest-read partial index — the approval queue.
@@ -31,7 +33,7 @@ class Quotation(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    reference: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    reference: Mapped[str] = mapped_column(String(32), nullable=False)
     order_number: Mapped[str | None] = mapped_column(String(32))
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), nullable=False)
     owner_rep_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -70,7 +72,7 @@ class Quotation(Base):
     )
 
 
-class QuoteLine(Base):
+class QuoteLine(Base, OrgScopedMixin):
     __tablename__ = "quote_lines"
     __table_args__ = (Index("ix_quote_lines_quotation_id", "quotation_id"),)
 

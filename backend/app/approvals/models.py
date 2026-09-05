@@ -3,10 +3,10 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base
+from app.db.base import Base, OrgScopedMixin
 
 
-class QuoteApproval(Base):
+class QuoteApproval(Base, OrgScopedMixin):
     __tablename__ = "quote_approvals"
     __table_args__ = (
         Index("ix_quote_approvals_quotation_id", "quotation_id"),

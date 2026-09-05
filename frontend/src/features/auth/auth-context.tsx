@@ -6,7 +6,14 @@ import { useRouter } from "next/navigation";
 import { tokenStorage } from "@/lib/api-client";
 import type { UserType } from "@/lib/types";
 import { authApi } from "@/features/auth/api";
-import type { Customer, LoginPayload, Me, RegisterPayload, User } from "@/features/auth/types";
+import type {
+  Customer,
+  LoginPayload,
+  Me,
+  Organization,
+  RegisterPayload,
+  User,
+} from "@/features/auth/types";
 
 /** Where a session of this type lands after login / on the home route. */
 export function homePathFor(userType: UserType | null): string {
@@ -18,6 +25,8 @@ interface AuthContextValue {
   user: User | null;
   /** Set when signed in as a customer; null otherwise. */
   customer: Customer | null;
+  /** The organization (tenant) the current session belongs to. */
+  organization: Organization | null;
   userType: UserType | null;
   isAuthenticated: boolean;
   /** True while the initial session restore is in flight. */
@@ -89,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     () => ({
       user: me?.user_type === "internal" ? me.internal : null,
       customer: me?.user_type === "customer" ? me.customer : null,
+      organization: me?.organization ?? null,
       userType: me?.user_type ?? null,
       isAuthenticated: me !== null,
       isLoading,

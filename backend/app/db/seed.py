@@ -6,6 +6,7 @@ Reset with: `docker compose exec backend python -m app.db.seed --reset`
 """
 
 import logging
+import re
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -15,7 +16,9 @@ from app.affinity.service import rebuild_affinity
 from app.catalog.models import Category, Product, ProductVariant
 from app.config.settings import settings
 from app.core.security import hash_password
+from app.core.tenant_context import set_current_org
 from app.customers.models import Customer
+from app.organizations.models import Organization
 from app.policies.models import DiscountPolicy
 from app.policies.service import create_policy
 from app.pricing.models import PriceList, PriceListEntry
@@ -24,6 +27,9 @@ from app.roles.models import Role
 from app.subscriptions.models import SubscriptionPlan
 from app.users.models import User
 from app.warehouses.models import Stock, Warehouse
+
+DEMO_ORG_NAME = "Demo Org"
+DEMO_ORG_SLUG = "demo"
 
 # Plausible co-purchase bundles, purely to give Phase 2's product-affinity computation
 # (an association-rule count over real `quote_lines`) something real to compute from.
@@ -249,6 +255,63 @@ def _seed_roles(db: Session) -> None:
     db.commit()
 
 
+def _slugify(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    return slug or "org"
+
+
+def unique_slug(db: Session, name: str) -> str:
+    """A URL-safe slug for `name`, suffixed `-2`, `-3`, … until it's unused."""
+    base = _slugify(name)
+    candidate = base
+    n = 2
+    while db.scalar(select(Organization).where(Organization.slug == candidate)) is not None:
+        candidate = f"{base}-{n}"
+        n += 1
+    return candidate
+
+
+def seed_organization(db: Session, org: Organization) -> None:
+    """Minimal bootstrap for a newly registered organization: its RBAC roles, a
+    default price list, and one active discount policy. The caller must have pinned
+    the tenant context to `org` first (so writes are stamped with its `org_id`).
+    Catalogue, warehouses, customers and additional members are left for the org's
+    admin to create."""
+    _seed_roles(db)
+
+    if db.scalar(select(PriceList).where(PriceList.is_default.is_(True))) is None:
+        db.add(PriceList(name="Default", tier=None, currency="INR", is_default=True))
+        db.commit()
+        logger.info("Seeded default price list for org %d", org.id)
+
+    if db.scalar(select(DiscountPolicy)) is None:
+        policy = create_policy(
+            db,
+            tier_ceilings=POLICY_V1["tier_ceilings"],
+            category_ceilings=[],  # no categories yet — admin adds them, then edits the policy
+            weights=POLICY_V1["weights"],
+            thresholds=POLICY_V1["thresholds"],
+            upsell=POLICY_V1["upsell"],
+            anomaly=POLICY_V1["anomaly"],
+            stalled_after_days=POLICY_V1["stalled_after_days"],
+        )
+        policy.is_active = True
+        policy.activated_at = datetime.now(timezone.utc)
+        db.commit()
+        logger.info("Seeded active discount policy v%d for org %d", policy.version, org.id)
+
+
+def _get_or_create_demo_org(db: Session) -> Organization:
+    org = db.scalar(select(Organization).where(Organization.slug == DEMO_ORG_SLUG))
+    if org is None:
+        org = Organization(name=DEMO_ORG_NAME, slug=DEMO_ORG_SLUG)
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+        logger.info("Seeded organization: %s", DEMO_ORG_NAME)
+    return org
+
+
 def _seed_users(db: Session) -> None:
     if db.scalar(select(User).where(User.email == settings.admin_email)) is None:
         admin_role = db.scalar(select(Role).where(Role.name == ADMIN_ROLE))
@@ -258,6 +321,7 @@ def _seed_users(db: Session) -> None:
                 full_name="Admin",
                 hashed_password=hash_password(settings.admin_password),
                 role=admin_role,
+                is_org_owner=True,
             )
         )
         db.commit()
@@ -532,6 +596,9 @@ def _seed_historical_quotations_and_affinity(db: Session) -> None:
 
 
 def seed_db(db: Session) -> None:
+    demo_org = _get_or_create_demo_org(db)
+    set_current_org(db, demo_org.id)
+
     _seed_roles(db)
     _seed_users(db)
     _seed_customers(db)

@@ -3,10 +3,10 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, PrimaryKeyConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base
+from app.db.base import Base, OrgScopedMixin
 
 
-class ProductAffinity(Base):
+class ProductAffinity(Base, OrgScopedMixin):
     """Precomputed co-purchase association between two products, from historical
     `quote_lines`. `lift` is the one place a `Numeric` is acceptable — it's a ratio,
     not money. See `BACKEND_PHASE_2.md` Task 7."""

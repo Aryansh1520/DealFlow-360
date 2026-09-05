@@ -11,6 +11,7 @@ from app.core.pagination import Page, PageParams
 from app.core.responses import SuccessResponse, ok
 from app.core.security import hash_password
 from app.db.session import get_db
+from app.roles.models import Role
 from app.users.models import User
 from app.users.schemas import UserCreate, UserRead, UserUpdate
 
@@ -75,6 +76,15 @@ def get_user(user_id: int, db: DbSession):
 )
 def update_user(user_id: int, payload: UserUpdate, db: DbSession):
     user = user_crud.get_or_404(db, user_id)
+    if user.is_org_owner:
+        if payload.is_active is False:
+            raise BadRequestException("The organization owner cannot be deactivated")
+        if payload.role_id is not None:
+            new_role = db.get(Role, payload.role_id)
+            if new_role is None or "*" not in new_role.permissions:
+                raise BadRequestException(
+                    "The organization owner must keep a role with full permissions"
+                )
     updated = user_crud.update(db, user, _prepare_user_data(payload.model_dump(exclude_unset=True)))
     return ok(updated, "User updated successfully.")
 
@@ -88,5 +98,7 @@ def delete_user(user_id: int, db: DbSession, current_user: CurrentUser):
     if user_id == current_user.id:
         raise BadRequestException("You cannot delete your own account")
     user = user_crud.get_or_404(db, user_id)
+    if user.is_org_owner:
+        raise BadRequestException("The organization owner cannot be deleted")
     user_crud.delete(db, user)
     return ok(None, "User deleted successfully.")

@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.core.pagination import PageParams
-from app.db.base import Base
+from app.core.tenant_context import get_current_org
+from app.db.base import Base, OrgScopedMixin
 
 ModelT = TypeVar("ModelT", bound=Base)
 
@@ -48,6 +49,14 @@ class CRUDBase(Generic[ModelT]):
     ) -> tuple[list[ModelT], int]:
         """Return (items, total) applying equality filters, search, sorting and pagination."""
         stmt = select(self.model)
+
+        # Belt-and-suspenders tenant scoping for the count subquery path — the
+        # session-level `with_loader_criteria` also covers this, but the explicit
+        # filter keeps the aggregate correct regardless.
+        if issubclass(self.model, OrgScopedMixin):
+            org_id = get_current_org(db)
+            if org_id is not None:
+                stmt = stmt.where(self.model.org_id == org_id)
 
         if filters:
             for field, value in filters.items():

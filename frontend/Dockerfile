@@ -24,8 +24,11 @@ COPY . .
 COPY --from=backend-schema /app/openapi.json ./backend-openapi.json
 RUN yarn openapi-typescript ./backend-openapi.json -o src/lib/api/schema.d.ts
 
-# NEXT_PUBLIC_* values are baked into the bundle at build time
-RUN if [ "$APP_ENV" = "production" ]; then yarn build; fi
+# NEXT_PUBLIC_* values are baked into the bundle at build time.
+# Run `next build` directly, not `yarn build` — the `build` script re-runs
+# openapi-typescript against ../backend/openapi.json, which doesn't exist in
+# this image (the schema was already generated from backend-openapi.json above).
+RUN if [ "$APP_ENV" = "production" ]; then yarn next build; fi
 
 EXPOSE 3001
 

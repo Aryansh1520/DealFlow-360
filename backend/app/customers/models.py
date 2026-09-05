@@ -1,10 +1,10 @@
 from sqlalchemy import Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, OrgScopedMixin, TimestampMixin
 
 
-class Customer(Base, TimestampMixin):
+class Customer(Base, TimestampMixin, OrgScopedMixin):
     """A portal user (the customer side of DealFlow360). Holds no RBAC role or
     permissions — the portal's capability set is fixed, unlike internal `User`s."""
 
@@ -12,6 +12,7 @@ class Customer(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Globally unique, like `users.email` — portal login has no org selector.
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     company: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(50))

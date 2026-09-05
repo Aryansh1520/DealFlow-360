@@ -27,10 +27,10 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, Session
 
 from app.core.exceptions import ValidationException
-from app.db.base import Base
+from app.db.base import Base, OrgScopedMixin
 
 
-class IdempotencyRecord(Base):
+class IdempotencyRecord(Base, OrgScopedMixin):
     __tablename__ = "idempotency_keys"
     __table_args__ = (Index("ix_idempotency_keys_created_at", "created_at"),)
 

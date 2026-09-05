@@ -4,15 +4,16 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueCon
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.catalog.models import Product
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, OrgScopedMixin, TimestampMixin
 
 
-class Warehouse(Base, TimestampMixin):
+class Warehouse(Base, TimestampMixin, OrgScopedMixin):
     __tablename__ = "warehouses"
+    __table_args__ = (UniqueConstraint("org_id", "code", name="uq_warehouses_org_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    code: Mapped[str] = mapped_column(String(50), nullable=False)
     address: Mapped[str | None] = mapped_column(String(500))
     # Relative weight used by the (Phase 3) allocator to rank warehouses and to
     # estimate shipping cost. 1..100, enforced at the schema layer.
@@ -21,7 +22,7 @@ class Warehouse(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
-class Stock(Base):
+class Stock(Base, OrgScopedMixin):
     __tablename__ = "stock"
     __table_args__ = (UniqueConstraint("product_id", "warehouse_id"),)
 
@@ -40,7 +41,7 @@ class Stock(Base):
     warehouse: Mapped[Warehouse] = relationship(Warehouse, lazy="joined")
 
 
-class StockMovement(Base):
+class StockMovement(Base, OrgScopedMixin):
     __tablename__ = "stock_movements"
 
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -31,5 +31,6 @@ class UserRead(BaseModel):
     email: EmailStr
     full_name: str
     is_active: bool
+    is_org_owner: bool
     role: RoleRead | None
     created_at: datetime

@@ -26,9 +26,11 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+from app.core.tenant_context import set_current_org
 from app.customers.models import Customer
-from app.db.seed import DEFAULT_USER_ROLE
+from app.db.seed import ADMIN_ROLE, seed_organization, unique_slug
 from app.db.session import get_db
+from app.organizations.models import Organization
 from app.roles.models import Role
 from app.users.models import User
 from app.users.schemas import UserRead
@@ -52,23 +54,39 @@ def _token_pair(subject_id: int, user_type: UserType) -> TokenResponse:
     status_code=status.HTTP_201_CREATED,
 )
 def register(payload: RegisterRequest, db: DbSession):
-    """Internal self-registration only. Customers are never self-registered — they're
-    created by staff (see `app/customers/router.py`)."""
+    """Creates a brand-new organization and its first user, who becomes the org's
+    super admin (the org's Administrator role, permissions ["*"], `is_org_owner`).
+
+    This is the *only* way an organization is created. Additional staff members
+    are added via `POST /users` and customers via `POST /customers`, both scoped
+    to the caller's organization — never here."""
     existing = db.scalar(select(User).where(User.email == payload.email))
     if existing:
         raise ConflictException("A user with this email already exists")
 
-    default_role = db.scalar(select(Role).where(Role.name == DEFAULT_USER_ROLE))
+    organization = Organization(
+        name=payload.organization_name,
+        slug=unique_slug(db, payload.organization_name),
+    )
+    db.add(organization)
+    db.flush()  # assign organization.id
+
+    # Pin every subsequent write in this request to the new tenant.
+    set_current_org(db, organization.id)
+    seed_organization(db, organization)
+
+    admin_role = db.scalar(select(Role).where(Role.name == ADMIN_ROLE))
     user = User(
         email=payload.email,
         full_name=payload.full_name,
         hashed_password=hash_password(payload.password),
-        role=default_role,
+        role=admin_role,
+        is_org_owner=True,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    return ok(user, "Account created successfully.")
+    return ok(user, "Organization created successfully.")
 
 
 @router.post("/login", response_model=SuccessResponse[TokenResponse])
@@ -116,11 +134,13 @@ def refresh(payload: RefreshRequest, db: DbSession):
 
 
 @router.get("/me", response_model=SuccessResponse[MeResponse])
-def read_me(principal: CurrentPrincipal):
+def read_me(principal: CurrentPrincipal, db: DbSession):
+    profile = principal.user if principal.user_type == INTERNAL else principal.customer
+    organization = db.get(Organization, profile.org_id)
     if principal.user_type == INTERNAL:
-        me = MeResponse(user_type=INTERNAL, internal=principal.user)
+        me = MeResponse(user_type=INTERNAL, internal=principal.user, organization=organization)
     else:
-        me = MeResponse(user_type=CUSTOMER, customer=principal.customer)
+        me = MeResponse(user_type=CUSTOMER, customer=principal.customer, organization=organization)
     return ok(me, "Current user retrieved successfully.")
 
 

@@ -14,7 +14,17 @@ export interface User {
   email: string;
   full_name: string;
   is_active: boolean;
+  /** The user who registered the organization. Cannot be deleted or demoted. */
+  is_org_owner: boolean;
   role: Role | null;
+  created_at: string;
+}
+
+/** The tenant a principal (internal user or customer) belongs to. */
+export interface Organization {
+  id: number;
+  name: string;
+  slug: string;
   created_at: string;
 }
 
@@ -36,6 +46,7 @@ export interface Me {
   user_type: UserType;
   internal: User | null;
   customer: Customer | null;
+  organization: Organization | null;
 }
 
 export interface LoginPayload {
@@ -43,7 +54,10 @@ export interface LoginPayload {
   password: string;
 }
 
+/** Signup creates a new organization and its super admin — never a member or
+ * customer of an existing organization. */
 export interface RegisterPayload {
+  organization_name: string;
   email: string;
   password: string;
   full_name: string;

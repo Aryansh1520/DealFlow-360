@@ -4,6 +4,12 @@ set -e
 echo "Running database migrations..."
 alembic upgrade head
 
+# Seed here, once, before the app starts — NOT in the FastAPI lifespan.
+# `uvicorn --workers 4` runs the lifespan in every worker, so on a fresh DB
+# all four would race the same INSERTs and trip a UniqueViolation.
+echo "Seeding database..."
+python -m app.db.seed
+
 # Source is bind-mounted in dev, so the image's baked openapi.json (from the
 # Dockerfile build step) can go stale the moment code changes without a
 # rebuild. Regenerate it on every start so the committed file — and anything

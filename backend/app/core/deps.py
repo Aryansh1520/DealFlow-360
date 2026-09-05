@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 from app.core.enums import ErrorCode
 from app.core.exceptions import ForbiddenException, UnauthorizedException
 from app.core.security import ACCESS_TOKEN, CUSTOMER, INTERNAL, decode_token
+from app.core.tenant_context import set_current_org
 from app.customers.models import Customer
 from app.db.session import get_db
+from app.organizations.models import Organization
 from app.users.models import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -40,19 +42,31 @@ def get_current_principal(
     user_type = payload.get("user_type")
     subject_id = int(payload["sub"])
 
+    # These lookups run before any tenant context is set, so they hit the global
+    # `users` / `customers` tables by primary key. Once the principal is known we
+    # pin the request to its organization for every downstream query.
     if user_type == INTERNAL:
         user = db.get(User, subject_id)
         if user is None or not user.is_active:
             raise UnauthorizedException("User not found or inactive")
+        _activate_org(db, user.org_id)
         return Principal(user_type=INTERNAL, user=user)
 
     if user_type == CUSTOMER:
         customer = db.get(Customer, subject_id)
         if customer is None or not customer.portal_enabled:
             raise UnauthorizedException("Customer not found or portal access disabled")
+        _activate_org(db, customer.org_id)
         return Principal(user_type=CUSTOMER, customer=customer)
 
     raise UnauthorizedException("Invalid token")
+
+
+def _activate_org(db: Session, org_id: int) -> None:
+    organization = db.get(Organization, org_id)
+    if organization is None or not organization.is_active:
+        raise UnauthorizedException("Organization not found or inactive")
+    set_current_org(db, org_id)
 
 
 CurrentPrincipal = Annotated[Principal, Depends(get_current_principal)]

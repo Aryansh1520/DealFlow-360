@@ -36,7 +36,7 @@ function findActiveItem(items: NavItem[], pathname: string): NavItem | undefined
 }
 
 export function Header() {
-  const { user, logout } = useAuth();
+  const { user, organization, logout } = useAuth();
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
 
@@ -68,6 +68,12 @@ export function Header() {
         {currentSection?.title ?? APP_NAME}
       </p>
 
+      {organization && (
+        <span className="hidden rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground md:inline-block">
+          {organization.name}
+        </span>
+      )}
+
       <div className="ml-auto">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -81,6 +87,9 @@ export function Header() {
             <DropdownMenuLabel>
               <p className="font-medium">{user?.full_name}</p>
               <p className="text-xs font-normal text-muted-foreground">{user?.email}</p>
+              {organization && (
+                <p className="text-xs font-normal text-muted-foreground">{organization.name}</p>
+              )}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout}>

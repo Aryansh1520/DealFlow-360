@@ -4,10 +4,10 @@ from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base
+from app.db.base import Base, OrgScopedMixin
 
 
-class QuoteEvent(Base):
+class QuoteEvent(Base, OrgScopedMixin):
     """Append-only ledger. No `updated_at` — no UPDATE or DELETE, ever."""
 
     __tablename__ = "quote_events"

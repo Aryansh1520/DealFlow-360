@@ -11,6 +11,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundException
+from app.core.tenant_context import require_current_org
 from app.policies.models import DiscountPolicy, PolicyCategoryCeiling, PolicyTierCeiling
 
 
@@ -110,7 +111,11 @@ def activate_policy(db: Session, policy: DiscountPolicy) -> DiscountPolicy:
     """One transaction: deactivate whatever is currently active, then activate this
     version. The partial unique index on `discount_policies.is_active` is the backstop
     — this is the code path that keeps it satisfied."""
-    db.execute(update(DiscountPolicy).where(DiscountPolicy.is_active.is_(True)).values(is_active=False))
+    db.execute(
+        update(DiscountPolicy)
+        .where(DiscountPolicy.org_id == require_current_org(db), DiscountPolicy.is_active.is_(True))
+        .values(is_active=False)
+    )
     policy.is_active = True
     policy.activated_at = datetime.now(timezone.utc)
     db.commit()

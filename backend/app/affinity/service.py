@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.affinity.models import ProductAffinity
 from app.catalog.models import Product
 from app.core.money import to_bps
+from app.core.tenant_context import require_current_org
 from app.policies.service import get_active_policy
 from app.pricing.service import RawLineInput
 from app.quotations.models import Quotation, QuoteLine
@@ -24,7 +25,11 @@ def rebuild_affinity(db: Session) -> int:
     """Association-rule affinity over every `quote_lines` row that exists right now,
     grouped by quotation. Real, general-purpose computation — not seed-specific —
     it's just that at Phase 2 seed time it only has whatever historical quotations
-    the seed itself created to run against."""
+    the seed itself created to run against.
+
+    Scoped to the current organization: the `quote_lines` read is filtered by the
+    tenant session events and the `product_affinity` wipe is filtered explicitly."""
+    org_id = require_current_org(db)
     rows = db.execute(select(QuoteLine.quotation_id, QuoteLine.product_id).distinct()).all()
 
     by_quotation: dict[int, set[int]] = {}
@@ -32,7 +37,7 @@ def rebuild_affinity(db: Session) -> int:
         by_quotation.setdefault(quotation_id, set()).add(product_id)
 
     total_quotations = len(by_quotation)
-    db.execute(delete(ProductAffinity))
+    db.execute(delete(ProductAffinity).where(ProductAffinity.org_id == org_id))
     if total_quotations == 0:
         db.commit()
         return 0

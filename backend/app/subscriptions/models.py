@@ -1,10 +1,10 @@
 from sqlalchemy import Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, OrgScopedMixin, TimestampMixin
 
 
-class SubscriptionPlan(Base, TimestampMixin):
+class SubscriptionPlan(Base, TimestampMixin, OrgScopedMixin):
     __tablename__ = "subscription_plans"
 
     id: Mapped[int] = mapped_column(primary_key=True)

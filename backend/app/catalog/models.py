@@ -10,27 +10,29 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, OrgScopedMixin, TimestampMixin
 
 
-class Category(Base, TimestampMixin):
+class Category(Base, TimestampMixin, OrgScopedMixin):
     __tablename__ = "categories"
+    __table_args__ = (UniqueConstraint("org_id", "code", name="uq_categories_org_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    code: Mapped[str] = mapped_column(String(50), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1000))
 
 
-class Product(Base, TimestampMixin):
+class Product(Base, TimestampMixin, OrgScopedMixin):
     __tablename__ = "products"
     __table_args__ = (
+        UniqueConstraint("org_id", "sku", name="uq_products_org_sku"),
         Index("ix_products_category_id", "category_id"),
         Index("ix_products_is_promoted", "is_promoted", postgresql_where=text("is_promoted")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    sku: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    sku: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"), nullable=False)
     description: Mapped[str | None] = mapped_column(String(2000))
@@ -54,7 +56,7 @@ class Product(Base, TimestampMixin):
     )
 
 
-class ProductVariant(Base):
+class ProductVariant(Base, OrgScopedMixin):
     __tablename__ = "product_variants"
     __table_args__ = (UniqueConstraint("product_id", "attribute", "value"),)
 

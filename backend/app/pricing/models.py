@@ -3,10 +3,10 @@ from datetime import date
 from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base, TimestampMixin
+from app.db.base import Base, OrgScopedMixin, TimestampMixin
 
 
-class PriceList(Base, TimestampMixin):
+class PriceList(Base, TimestampMixin, OrgScopedMixin):
     __tablename__ = "price_lists"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -23,7 +23,7 @@ class PriceList(Base, TimestampMixin):
     )
 
 
-class PriceListEntry(Base):
+class PriceListEntry(Base, OrgScopedMixin):
     __tablename__ = "price_list_entries"
     __table_args__ = (
         UniqueConstraint("price_list_id", "product_id", "variant_id"),

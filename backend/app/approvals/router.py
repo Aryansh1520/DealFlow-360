@@ -12,6 +12,7 @@ from app.core.deps import CurrentUser
 from app.core.idempotency import begin_idempotent, finish_idempotent
 from app.core.pagination import Page, PageParams
 from app.core.responses import SuccessResponse, ok
+from app.core.tenant_context import require_current_org
 from app.db.session import get_db
 from app.quotations.schemas import QuotationRead
 from app.quotations.serialization import compute_quotation, to_quotation_read
@@ -52,7 +53,7 @@ def approval_queue(
     level: Annotated[str | None, Query()] = None,
     status: Annotated[str | None, Query()] = None,
 ):
-    stmt = select(QuoteApproval)
+    stmt = select(QuoteApproval).where(QuoteApproval.org_id == require_current_org(db))
     if level:
         stmt = stmt.where(QuoteApproval.level == level)
     if status:

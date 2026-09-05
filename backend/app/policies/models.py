@@ -1,23 +1,39 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, func, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.catalog.models import Category
-from app.db.base import Base
+from app.db.base import Base, OrgScopedMixin
 
 
-class DiscountPolicy(Base):
+class DiscountPolicy(Base, OrgScopedMixin):
     __tablename__ = "discount_policies"
     __table_args__ = (
-        # Only one policy can be active at a time — enforced by the database, not
-        # just application logic. See `BACKEND_PHASE_1.md` Task 7.
-        Index("ix_discount_policies_is_active", "is_active", unique=True, postgresql_where=text("is_active")),
+        UniqueConstraint("org_id", "version", name="uq_discount_policies_org_version"),
+        # Only one policy can be active at a time *per organization* — enforced by
+        # the database, not just application logic. See `BACKEND_PHASE_1.md` Task 7.
+        Index(
+            "ix_discount_policies_is_active",
+            "org_id",
+            unique=True,
+            postgresql_where=text("is_active"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    version: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     weights: Mapped[dict] = mapped_column(JSONB, nullable=False)
     thresholds: Mapped[dict] = mapped_column(JSONB, nullable=False)
@@ -37,7 +53,7 @@ class DiscountPolicy(Base):
     )
 
 
-class PolicyTierCeiling(Base):
+class PolicyTierCeiling(Base, OrgScopedMixin):
     __tablename__ = "policy_tier_ceilings"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -48,7 +64,7 @@ class PolicyTierCeiling(Base):
     policy: Mapped[DiscountPolicy] = relationship(DiscountPolicy, back_populates="tier_ceilings")
 
 
-class PolicyCategoryCeiling(Base):
+class PolicyCategoryCeiling(Base, OrgScopedMixin):
     __tablename__ = "policy_category_ceilings"
 
     id: Mapped[int] = mapped_column(primary_key=True)

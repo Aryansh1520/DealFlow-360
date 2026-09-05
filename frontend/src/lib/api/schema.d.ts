@@ -15,8 +15,12 @@ export interface paths {
         put?: never;
         /**
          * Register
-         * @description Internal self-registration only. Customers are never self-registered — they're
-         *     created by staff (see `app/customers/router.py`).
+         * @description Creates a brand-new organization and its first user, who becomes the org's
+         *     super admin (the org's Administrator role, permissions ["*"], `is_org_owner`).
+         *
+         *     This is the *only* way an organization is created. Additional staff members
+         *     are added via `POST /users` and customers via `POST /customers`, both scoped
+         *     to the caller's organization — never here.
          */
         post: operations["register_api_v1_auth_register_post"];
         delete?: never;
@@ -1840,6 +1844,7 @@ export interface components {
         /**
          * MeResponse
          * @description Discriminated on `user_type`: exactly one of `internal` / `customer` is set.
+         *     `organization` is the tenant both principal kinds belong to.
          */
         MeResponse: {
             /**
@@ -1849,6 +1854,7 @@ export interface components {
             user_type: "internal" | "customer";
             internal?: components["schemas"]["UserRead"] | null;
             customer?: components["schemas"]["CustomerRead"] | null;
+            organization?: components["schemas"]["OrganizationRead"] | null;
         };
         /** MeUpdate */
         MeUpdate: {
@@ -1902,6 +1908,20 @@ export interface components {
             };
             /** Permission Resources */
             permission_resources: components["schemas"]["PermissionResourceRead"][];
+        };
+        /** OrganizationRead */
+        OrganizationRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** Page[AlertRead] */
         Page_AlertRead_: {
@@ -2918,8 +2938,15 @@ export interface components {
             /** Refresh Token */
             refresh_token: string;
         };
-        /** RegisterRequest */
+        /**
+         * RegisterRequest
+         * @description Self-service signup: creates a brand-new organization and its first user,
+         *     who becomes the organization's super admin. Not a path for adding members or
+         *     customers to an existing organization.
+         */
         RegisterRequest: {
+            /** Organization Name */
+            organization_name: string;
             /**
              * Email
              * Format: email
@@ -3913,6 +3940,8 @@ export interface components {
             full_name: string;
             /** Is Active */
             is_active: boolean;
+            /** Is Org Owner */
+            is_org_owner: boolean;
             role: components["schemas"]["RoleRead"] | null;
             /**
              * Created At
