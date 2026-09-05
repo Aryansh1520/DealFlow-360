@@ -80,7 +80,7 @@ export function WarehousesTable() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Code</TableHead>
-              <TableHead>Shipping weight</TableHead>
+              <TableHead>Shipping cost / kg</TableHead>
               <TableHead>Replenishment threshold</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[50px]" />

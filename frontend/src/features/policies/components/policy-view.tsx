@@ -1,3 +1,5 @@
+import { Info } from "lucide-react";
+
 import { Bps, Money } from "@/components/ui/money";
 import {
   Table,
@@ -7,8 +9,32 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PolicyRead } from "@/lib/api/types";
 import { FieldHelp } from "@/features/policies/components/field-help";
+import { POLICY_FIELD_TOOLTIPS as T } from "@/features/policies/field-copy";
+
+/** Small (i) affordance for a table column header — same idea as `FieldHelp`,
+ * just for a `TableHead` instead of a labelled form field. */
+function HeaderHelp({ label, tooltip }: { label: string; tooltip: string }) {
+  return (
+    <span className="inline-flex items-center justify-end gap-1">
+      {label}
+      <Tooltip delayDuration={200}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="text-muted-foreground/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full"
+            aria-label={`What does "${label}" mean?`}
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{tooltip}</TooltipContent>
+      </Tooltip>
+    </span>
+  );
+}
 
 /** Read-only rendering of one policy version — the "this is what's live" view,
  * as distinct from `PolicyForm`, which always creates a new draft. */
@@ -27,7 +53,9 @@ export function PolicyView({ policy }: { policy: PolicyRead }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Tier</TableHead>
-                <TableHead className="text-right">Ceiling</TableHead>
+                <TableHead className="text-right">
+                  <HeaderHelp label="Ceiling" tooltip={T.tierCeiling} />
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -56,8 +84,12 @@ export function PolicyView({ policy }: { policy: PolicyRead }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Category</TableHead>
-                <TableHead className="text-right">Ceiling</TableHead>
-                <TableHead className="text-right">Margin floor</TableHead>
+                <TableHead className="text-right">
+                  <HeaderHelp label="Ceiling" tooltip={T.categoryCeiling} />
+                </TableHead>
+                <TableHead className="text-right">
+                  <HeaderHelp label="Margin floor" tooltip={T.categoryMarginFloor} />
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

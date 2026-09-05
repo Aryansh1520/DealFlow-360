@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/features/auth/auth-context";
 import type { PolicyRead } from "@/lib/api/types";
 import { ActivatePolicyDialog } from "@/features/policies/components/activate-policy-dialog";
@@ -63,60 +64,62 @@ export function PolicyScreen() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <Select
-            value={String(selected.version)}
-            onValueChange={(value) => {
-              setSelectedVersion(Number(value));
-              setIsEditing(false);
-            }}
-          >
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {versions.map((version) => (
-                <SelectItem key={version.id} value={String(version.version)}>
-                  Version {version.version}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {selected.is_active ? (
-            <Badge variant="positive">Active</Badge>
-          ) : (
-            <Badge variant="outline">Draft</Badge>
-          )}
-        </div>
-        {canWrite && !isEditing && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setIsEditing(true)}>
-              <Pencil />
-              Edit as new draft
-            </Button>
-            {!selected.is_active && (
-              <Button onClick={() => setActivating(selected)}>Activate this version</Button>
+    <TooltipProvider>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Select
+              value={String(selected.version)}
+              onValueChange={(value) => {
+                setSelectedVersion(Number(value));
+                setIsEditing(false);
+              }}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {versions.map((version) => (
+                  <SelectItem key={version.id} value={String(version.version)}>
+                    Version {version.version}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selected.is_active ? (
+              <Badge variant="positive">Active</Badge>
+            ) : (
+              <Badge variant="outline">Draft</Badge>
             )}
           </div>
+          {canWrite && !isEditing && (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setIsEditing(true)}>
+                <Pencil />
+                Edit as new draft
+              </Button>
+              {!selected.is_active && (
+                <Button onClick={() => setActivating(selected)}>Activate this version</Button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {isEditing ? (
+          <PolicyForm
+            source={selected}
+            onCreated={(created) => {
+              setSelectedVersion(created.version);
+              setIsEditing(false);
+            }}
+            onCancel={() => setIsEditing(false)}
+          />
+        ) : (
+          <PolicyView policy={selected} />
         )}
+
+        <ActivatePolicyDialog policy={activating} onClose={() => setActivating(null)} />
       </div>
-
-      {isEditing ? (
-        <PolicyForm
-          source={selected}
-          onCreated={(created) => {
-            setSelectedVersion(created.version);
-            setIsEditing(false);
-          }}
-          onCancel={() => setIsEditing(false)}
-        />
-      ) : (
-        <PolicyView policy={selected} />
-      )}
-
-      <ActivatePolicyDialog policy={activating} onClose={() => setActivating(null)} />
-    </div>
+    </TooltipProvider>
   );
 }
