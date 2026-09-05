@@ -32,6 +32,9 @@ interface LineTableProps {
   onQuantityChange: (lineId: number, quantity: number) => void;
   onDiscountCommit: (lineId: number, discountBps: number) => void;
   onRemove: (lineId: number) => void;
+  /** Sizing hook from the builder so this card lines up with the panel beside
+   * it. The row list scrolls internally once it outgrows this height. */
+  className?: string;
 }
 
 export const LineTable = React.memo(function LineTable({
@@ -42,10 +45,16 @@ export const LineTable = React.memo(function LineTable({
   onQuantityChange,
   onDiscountCommit,
   onRemove,
+  className,
 }: LineTableProps) {
   if (lines.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
+      <div
+        className={cn(
+          "flex items-center justify-center rounded-lg border border-dashed p-6 text-sm text-muted-foreground",
+          className
+        )}
+      >
         Add a product from the catalogue to start this quote.
       </div>
     );
@@ -53,34 +62,41 @@ export const LineTable = React.memo(function LineTable({
 
   return (
     <TooltipProvider>
-      <div className="rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Product</TableHead>
-              <TableHead className="w-28 text-center">Qty</TableHead>
-              <TableHead className="w-32 text-right">Discount</TableHead>
-              <TableHead className="text-right">Unit price</TableHead>
-              <TableHead className="text-right">Net</TableHead>
-              <TableHead className="text-right">Margin</TableHead>
-              {editable && <TableHead className="w-10" />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {lines.map((line, index) => (
-              <LineRow
-                key={line.id}
-                line={line}
-                currency={currency}
-                traceLine={previewTrace?.lines[index] ?? null}
-                editable={editable}
-                onQuantityChange={onQuantityChange}
-                onDiscountCommit={onDiscountCommit}
-                onRemove={onRemove}
-              />
-            ))}
-          </TableBody>
-        </Table>
+      <div className={cn("flex flex-col overflow-hidden rounded-lg border bg-card", className)}>
+        <div className="min-h-0 flex-1 overflow-y-auto [&>div]:overflow-visible">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-card">
+              <TableRow>
+                <TableHead>Product</TableHead>
+                <TableHead className="w-28 text-center">Qty</TableHead>
+                <TableHead className="w-32 text-right">Discount</TableHead>
+                <TableHead className="text-right">Unit price</TableHead>
+                <TableHead className="text-right">Net</TableHead>
+                <TableHead className="text-right">Margin</TableHead>
+                {editable && <TableHead className="w-10" />}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {/* Newest line on top, but keep the original index so the
+               * positional `previewTrace.lines[index]` match still holds. */}
+              {lines
+                .map((line, index) => ({ line, index }))
+                .reverse()
+                .map(({ line, index }) => (
+                  <LineRow
+                    key={line.id}
+                    line={line}
+                    currency={currency}
+                    traceLine={previewTrace?.lines[index] ?? null}
+                    editable={editable}
+                    onQuantityChange={onQuantityChange}
+                    onDiscountCommit={onDiscountCommit}
+                    onRemove={onRemove}
+                  />
+                ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </TooltipProvider>
   );

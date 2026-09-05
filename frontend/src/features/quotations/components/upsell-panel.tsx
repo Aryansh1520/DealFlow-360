@@ -20,20 +20,20 @@ export function UpsellPanel({ quotationId, onAdd }: UpsellPanelProps) {
   const dismiss = useDismissSuggestion(quotationId);
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="flex items-center gap-1.5 text-sm font-medium">
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="flex shrink-0 items-center gap-1.5 text-sm font-medium">
         <Sparkles className="h-4 w-4 text-info" />
         Suggested add-ons
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
           {Array.from({ length: 3 }).map((_, index) => (
             <Skeleton key={index} className="h-28 w-full" />
           ))}
         </div>
       ) : suggestions && suggestions.length > 0 ? (
-        <div className="space-y-2 overflow-y-auto">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
           {suggestions.map((suggestion) => (
             <div
               key={suggestion.product_id}

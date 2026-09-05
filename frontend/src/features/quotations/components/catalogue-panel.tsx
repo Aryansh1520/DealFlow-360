@@ -45,8 +45,8 @@ export function CataloguePanel({ onAdd }: CataloguePanelProps) {
   });
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="space-y-2">
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="shrink-0 space-y-2">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -71,7 +71,7 @@ export function CataloguePanel({ onAdd }: CataloguePanelProps) {
         </Select>
       </div>
 
-      <div className="flex-1 space-y-1.5 overflow-y-auto">
+      <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
         {isLoading ? (
           Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-16 w-full" />)
         ) : data && data.items.length > 0 ? (

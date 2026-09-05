@@ -70,10 +70,9 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
 
   if (isLoading || !quotation) {
     return (
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr_300px]">
-        <Skeleton className="h-96 w-full" />
-        <Skeleton className="h-96 w-full" />
-        <Skeleton className="h-96 w-full" />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <Skeleton className="h-[38rem] w-full" />
+        <Skeleton className="h-[38rem] w-full" />
       </div>
     );
   }
@@ -153,6 +152,70 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
       })
       .catch(() => {});
 
+  // The quotation header (reference, customer, headline amount) and the submit /
+  // cancel actions are handed to <TotalsBlock> as its `header` / `footer` so the
+  // amount and the live totals read as one card.
+  const summaryHeader = (
+    <div className="shrink-0">
+      <div className="flex items-center gap-2">
+        <h1 className="text-lg font-semibold">{quotation.reference}</h1>
+        <StatusBadge status={quotation.status} />
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {quotation.customer_name} · <span className="capitalize">{quotation.customer_tier}</span> ·{" "}
+        {quotation.owner_rep_name}
+      </p>
+      <p className="mt-2 text-xl font-semibold tabular-nums">
+        <Money minor={quotation.computation.total_minor} currency={quotation.currency} />
+      </p>
+      <Separator className="mt-3" />
+    </div>
+  );
+
+  const summaryFooter =
+    canSubmit || canCancel ? (
+      <div className="mt-auto flex shrink-0 flex-col gap-2 pt-2">
+        {canSubmit && (
+          <Button
+            disabled={editorState.lines.length === 0}
+            onClick={() => setConfirmSubmitOpen(true)}
+          >
+            <Send className="h-4 w-4" />
+            Submit for Approval
+          </Button>
+        )}
+        {canCancel && (
+          <Button variant="outline" onClick={() => setConfirmCancelOpen(true)}>
+            Cancel
+          </Button>
+        )}
+      </div>
+    ) : null;
+
+  const summaryCard = (
+    <TotalsBlock
+      className="shrink-0 lg:h-[30.5rem]"
+      header={summaryHeader}
+      footer={summaryFooter}
+      computation={computation}
+      isFetching={previewFetching}
+      onOpenTrace={() => setTraceOpen(true)}
+    />
+  );
+
+  const lineTable = (className: string) => (
+    <LineTable
+      className={className}
+      lines={quotation.lines}
+      currency={quotation.currency}
+      previewTrace={computation?.trace ?? null}
+      editable={editable}
+      onQuantityChange={handleQuantityChange}
+      onDiscountCommit={handleDiscountCommit}
+      onRemove={handleRemove}
+    />
+  );
+
   return (
     <div className="space-y-4">
       {!editable && quotation.status.startsWith("pending_") && (
@@ -174,91 +237,40 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
         </Alert>
       )}
 
-      {/* Row 1: line-item table (left) | status + suggestions, stacked (right, same
-       * width as before but split top/bottom to fit in the same vertical space). */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
-        <div className="min-w-0 space-y-3">
+      {/* Two columns. Left stack: catalogue, line items, activity. Right stack:
+       * the merged amount + totals card, then suggestions. Both columns run the
+       * same total height (62rem) so the right split lands at a clean half each
+       * (30.5rem + 1rem gap + 30.5rem), and every card scrolls its own content
+       * instead of growing the page. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-4">
           {editable && (
-            <div className="max-h-72 overflow-hidden rounded-lg border bg-card p-3 shadow-sm">
+            <div className="flex shrink-0 flex-col overflow-hidden rounded-lg border bg-card p-3 shadow-sm lg:h-72">
               <CataloguePanel onAdd={handleAddProduct} />
             </div>
           )}
-          <LineTable
-            lines={quotation.lines}
-            currency={quotation.currency}
-            previewTrace={computation?.trace ?? null}
-            editable={editable}
-            onQuantityChange={handleQuantityChange}
-            onDiscountCommit={handleDiscountCommit}
-            onRemove={handleRemove}
-          />
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-4 lg:h-[calc(100vh-14rem)]">
-          <div className="flex h-1/2 min-h-0 flex-col justify-between gap-3 overflow-y-auto rounded-lg border bg-card p-4 shadow-sm">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-semibold">{quotation.reference}</h1>
-                <StatusBadge status={quotation.status} />
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {quotation.customer_name} · <span className="capitalize">{quotation.customer_tier}</span> ·{" "}
-                {quotation.owner_rep_name}
-              </p>
-              <p className="mt-2 text-xl font-semibold tabular-nums">
-                <Money minor={quotation.computation.total_minor} currency={quotation.currency} />
-              </p>
-            </div>
-            <div className="flex flex-col gap-2">
-              {canSubmit && (
-                <Button
-                  disabled={editorState.lines.length === 0}
-                  onClick={() => setConfirmSubmitOpen(true)}
-                >
-                  <Send className="h-4 w-4" />
-                  Submit for Approval
-                </Button>
-              )}
-              {canCancel && (
-                <Button variant="outline" onClick={() => setConfirmCancelOpen(true)}>
-                  Cancel
-                </Button>
-              )}
+          {lineTable(editable ? "shrink-0 lg:h-[22rem]" : "shrink-0 lg:h-[41rem]")}
+          <div className="flex min-h-0 shrink-0 flex-col rounded-lg border bg-card p-4 shadow-sm lg:h-80">
+            <h2 className="mb-2 text-sm font-semibold">Activity</h2>
+            <Separator className="mb-3" />
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+              <Timeline quotationId={quotationId} />
             </div>
           </div>
+        </div>
 
-          <div className="h-1/2 min-h-0 overflow-y-auto rounded-lg border bg-card p-3 shadow-sm">
-            {editable ? (
+        <div className="flex min-w-0 flex-col gap-4">
+          {summaryCard}
+          {editable ? (
+            <div className="flex shrink-0 flex-col overflow-hidden rounded-lg border bg-card p-3 shadow-sm lg:h-[30.5rem]">
               <UpsellPanel quotationId={quotationId} onAdd={handleAddSuggestion} />
-            ) : (
-              <p className="p-4 text-center text-sm text-muted-foreground">
-                Suggestions are only available while editing.
-              </p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="flex shrink-0 items-center justify-center rounded-lg border bg-card p-4 text-center text-sm text-muted-foreground shadow-sm lg:h-[30.5rem]">
+              Suggestions are only available while editing.
+            </div>
+          )}
         </div>
-      </div>
-
-      {/* Row 2: activity (left) | gross amount, risk score, etc (right). Both cards
-       * share one explicit height so they always match exactly, each scrolling its
-       * own content internally rather than growing the row (mirrors row 1's
-       * `h-[calc(...)]` approach — CSS alone can't size one sibling off the other's
-       * natural content height without a shared explicit height to fill). */}
-      <div className="grid grid-cols-1 gap-4 lg:h-80 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="flex min-h-0 min-w-0 flex-col rounded-lg border bg-card p-4 shadow-sm lg:h-full">
-          <h2 className="mb-2 text-sm font-semibold">Activity</h2>
-          <Separator className="mb-3" />
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-            <Timeline quotationId={quotationId} />
-          </div>
-        </div>
-
-        <TotalsBlock
-          className="min-w-0 lg:h-full"
-          computation={computation}
-          isFetching={previewFetching}
-          onOpenTrace={() => setTraceOpen(true)}
-        />
       </div>
 
       <DecisionTraceDrawer quotationId={quotationId} open={traceOpen} onOpenChange={setTraceOpen} />
