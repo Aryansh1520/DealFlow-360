@@ -87,9 +87,18 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
     );
   }
 
-  const editable = quotation.status === "draft" || quotation.status === "returned_for_revision";
+  // Matches the backend's actual `_LOCKED_STATUSES` (quotations/service.py) —
+  // everything except these stays editable, including `pending_l1`,
+  // `pending_l2` and `approved`. That's deliberate: editing a line there is
+  // exactly what `DECISION_ENGINE.md` §8's "golden rule" exists to handle —
+  // the backend re-runs the engine, skips stale approvals and re-routes
+  // automatically the moment `approved_line_hash` no longer matches. The UI
+  // must not be stricter than the backend or that flow can never be reached.
+  const LOCKED_STATUSES = ["confirmed", "fulfilling", "invoiced", "paid", "rejected", "cancelled", "expired"];
+  const editable = !LOCKED_STATUSES.includes(quotation.status);
+  const isPendingApproval = quotation.status === "pending_l1" || quotation.status === "pending_l2";
   const canCancel = allowedTransitions.includes("cancelled");
-  const canSubmit = editable;
+  const canSubmit = quotation.status === "draft" || quotation.status === "returned_for_revision";
 
   const handleAddProduct = (product: ProductRead) => {
     addLine.mutate({
@@ -178,12 +187,21 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
         </div>
       </div>
 
-      {!editable && quotation.status.startsWith("pending_") && (
+      {isPendingApproval && (
         <Alert>
           <AlertTitle>Awaiting approval</AlertTitle>
           <AlertDescription>
-            This quotation is in the approval queue and can&apos;t be edited until it&apos;s
-            returned or acted on.
+            This quotation is in the approval queue. Editing a line here is allowed, but it
+            will invalidate any approval already granted and re-route the quote from scratch.
+          </AlertDescription>
+        </Alert>
+      )}
+      {quotation.status === "approved" && (
+        <Alert>
+          <AlertTitle>Already approved</AlertTitle>
+          <AlertDescription>
+            Editing a line will skip the existing approval and re-run the decision engine —
+            the quote may need to go through approval again before it can be sent.
           </AlertDescription>
         </Alert>
       )}
