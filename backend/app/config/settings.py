@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     # Redis / task queue (Dramatiq)
     redis_url: str = "redis://localhost:6379/0"
 
+    # Rate limiting (in-memory, per IP + per account)
+    rate_limit_enabled: bool = True
+    rate_limit_requests: int = 100
+    rate_limit_window_seconds: int = 60
+
     # MinIO / object storage
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "minioadmin"
