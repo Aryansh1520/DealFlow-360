@@ -87,6 +87,11 @@ def to_portal_quotation_read(db: Session, quotation: Quotation) -> PortalQuotati
         )
         .order_by(QuoteEvent.created_at.asc())
     ).all()
+
+    # The customer can only confirm a quote the rep has explicitly *sent* — a bare
+    # `approved` (e.g. auto-approved and never sent) isn't confirmable, so an SSE
+    # blip can't let the customer accept terms they were never actually shown.
+    has_been_sent = any(e.event_type == "quote.sent" for e in events)
     timeline = [
         PortalTimelineEntry(
             event_type=e.event_type,
@@ -108,6 +113,20 @@ def to_portal_quotation_read(db: Session, quotation: Quotation) -> PortalQuotati
         lines=lines,
         totals=totals,
         timeline=timeline,
-        can_confirm=quotation.status in _CONFIRMABLE,
+        can_confirm=quotation.status in _CONFIRMABLE and has_been_sent,
         can_counter=quotation.status in _COUNTERABLE,
+    )
+
+
+def quotation_has_been_sent(db: Session, quotation_id: int) -> bool:
+    """A `quote.sent` event exists — the rep explicitly pushed the quote to the
+    customer at least once."""
+    return (
+        db.scalar(
+            select(QuoteEvent.id).where(
+                QuoteEvent.quotation_id == quotation_id,
+                QuoteEvent.event_type == "quote.sent",
+            )
+        )
+        is not None
     )

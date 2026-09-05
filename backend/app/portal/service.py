@@ -20,7 +20,7 @@ from app.customers.models import Customer
 from app.events.models import QuoteEvent
 from app.events.service import record_event
 from app.portal.schemas import PortalCommentRequest, PortalCounterRequest, PortalQuotationRead
-from app.portal.serialization import to_portal_quotation_read
+from app.portal.serialization import quotation_has_been_sent, to_portal_quotation_read
 from app.quotations.models import Quotation
 from app.quotations.serialization import compute_quotation
 from app.quotations.transitions import transition
@@ -174,6 +174,12 @@ def confirm(
     if quotation.status not in _CONFIRMABLE:
         raise ConflictException(
             f"This quotation is {quotation.status} and can no longer be confirmed.",
+            code=ErrorCode.ILLEGAL_TRANSITION,
+        )
+    if not quotation_has_been_sent(db, quotation.id):
+        raise ConflictException(
+            "This quotation hasn't been sent to you yet — your rep will let you know "
+            "when it's ready to confirm.",
             code=ErrorCode.ILLEGAL_TRANSITION,
         )
     if expected_version != quotation.version:

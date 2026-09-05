@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Bps, Money } from "@/components/ui/money";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { useEnums } from "@/features/meta/hooks";
 import type { QuoteComputation } from "@/lib/api/types";
 
 interface TotalsBlockProps {
@@ -146,48 +145,23 @@ function TotalsBody({
           Why? <HelpCircle className="h-3 w-3" />
         </button>
       </div>
-
-      <ApprovalPreview
-        requiredApprovals={computation.required_approvals}
-        outcome={trace.outcome}
-      />
     </div>
   );
 }
 
-function ApprovalPreview({
-  requiredApprovals,
-  outcome,
-}: {
-  requiredApprovals: string[];
-  outcome: QuoteComputation["trace"]["outcome"];
-}) {
-  const { data: enums } = useEnums();
+/** The approval outcome as a single coloured capsule — meant to sit inline with
+ * the quotation's customer / tier / rep line, not as a block in the totals body. */
+export function ApprovalBadge({ computation }: { computation: QuoteComputation | null }) {
+  if (!computation) return null;
 
-  if (outcome === "blocked") {
-    return (
-      <div className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
-        Blocked — a line is priced below cost. This can’t be submitted; adjust the
-        discount first.
-      </div>
-    );
+  if (computation.trace.outcome === "blocked") {
+    return <Badge variant="danger">Below cost</Badge>;
   }
-
-  if (requiredApprovals.length === 0) {
-    return (
-      <div className="rounded-md bg-positive/10 px-3 py-2 text-sm text-positive">
-        Will auto-approve.
-      </div>
-    );
+  if (computation.required_approvals.length === 0) {
+    return <Badge variant="positive">Auto-approve</Badge>;
   }
-  const labels = requiredApprovals
-    .map((level) => enums?.labels.approval_level?.[level] ?? level)
-    .join(" then ");
-  return (
-    <div className="rounded-md bg-warning/10 px-3 py-2 text-sm text-warning">
-      Will require: {labels} approval
-    </div>
-  );
+  const needsL2 = computation.required_approvals.includes("l2_finance");
+  return <Badge variant="warning">{needsL2 ? "Needs L1 + L2" : "Needs L1"}</Badge>;
 }
 
 function Row({ label, value }: { label: React.ReactNode; value: React.ReactNode }) {

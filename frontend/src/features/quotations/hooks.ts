@@ -221,6 +221,34 @@ export interface PendingCounter {
   lineScoped: boolean;
 }
 
+// A rep edit that changes what the customer would see: lines, the order discount,
+// or an approval landing. `quote.sent` is what pushes these to the customer.
+const TERM_CHANGE_EVENTS = new Set([
+  "quote.discount_changed",
+  "quote.line_added",
+  "quote.line_updated",
+  "quote.line_removed",
+  "quote.upsell_added",
+  "quote.approved",
+]);
+const UNSENT_RELEVANT_STATUSES = new Set(["approved", "sent", "under_negotiation"]);
+
+/** True when the quote's current terms haven't been pushed to the customer — the
+ * most recent line / discount / approval change is newer than the last
+ * `quote.sent` (or it has never been sent). Only meaningful while the quote can
+ * still be sent; the banner it drives clears once the rep clicks "Send to customer". */
+export function useUnsentChanges(id: number, status: string | undefined): boolean {
+  const { data } = useQuotationEvents(id);
+  return React.useMemo(() => {
+    if (!status || !UNSENT_RELEVANT_STATUSES.has(status)) return false;
+    const events = (data?.pages ?? []).flatMap((p) => p.items);
+    const lastChange = events.find((e) => TERM_CHANGE_EVENTS.has(e.event_type));
+    if (!lastChange) return false;
+    const lastSent = events.find((e) => e.event_type === "quote.sent");
+    return !lastSent || lastChange.created_at > lastSent.created_at;
+  }, [data, status]);
+}
+
 /** The customer's most recent counter-offer that the rep hasn't responded to yet.
  * `null` when there is no open counter. Shared by the builder banner and the
  * order-discount cap so both agree on what "requested" means. */

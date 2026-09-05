@@ -25,7 +25,7 @@ import { QuotationTabs } from "@/features/quotations/components/quotation-tabs";
 import { CataloguePanel } from "@/features/quotations/components/catalogue-panel";
 import { LineTable } from "@/features/quotations/components/line-table";
 import { Timeline } from "@/features/quotations/components/timeline";
-import { TotalsBlock } from "@/features/quotations/components/totals-block";
+import { ApprovalBadge, TotalsBlock } from "@/features/quotations/components/totals-block";
 import { UpsellPanel } from "@/features/quotations/components/upsell-panel";
 import { editorReducer, quotationToEditorState } from "@/features/quotations/editor-reducer";
 import {
@@ -35,6 +35,7 @@ import {
   useRemoveLine,
   useSubmitQuotation,
   useTransitionQuotation,
+  useUnsentChanges,
   useUpdateLine,
   useUpdateQuotation,
 } from "@/features/quotations/hooks";
@@ -58,6 +59,7 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
   const { connected: live } = useLiveEvents(`quote:${quotationId}`, invalidateOnFrame);
 
   const pendingCounter = usePendingCounter(quotationId);
+  const unsentChanges = useUnsentChanges(quotationId, quotation?.status);
 
   // Manual escape hatch — one click re-pulls the quote, its timeline, the
   // suggestions and the decision trace (all keyed under ["quotations", id]).
@@ -245,10 +247,13 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
         <h1 className="text-lg font-semibold">{quotation.reference}</h1>
         <StatusBadge status={quotation.status} />
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {quotation.customer_name} · <span className="capitalize">{quotation.customer_tier}</span> ·{" "}
-        {quotation.owner_rep_name}
-      </p>
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+        <span>
+          {quotation.customer_name} · <span className="capitalize">{quotation.customer_tier}</span> ·{" "}
+          {quotation.owner_rep_name}
+        </span>
+        <ApprovalBadge computation={computation} />
+      </div>
       <Separator className="mt-3" />
     </div>
   );
@@ -338,7 +343,16 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
           </AlertDescription>
         </Alert>
       )}
-      {quotation.status === "approved" && (
+      {unsentChanges && canSend ? (
+        <Alert>
+          <AlertTitle>Not sent to the customer yet</AlertTitle>
+          <AlertDescription>
+            Your changes are saved, but the customer still sees the version you last sent
+            them. They reach the customer only when you click <strong>Send to Customer</strong> —
+            the flow picks up from there.
+          </AlertDescription>
+        </Alert>
+      ) : quotation.status === "approved" ? (
         <Alert>
           <AlertTitle>Already approved</AlertTitle>
           <AlertDescription>
@@ -346,7 +360,7 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
             the quote may need to go through approval again before it can be sent.
           </AlertDescription>
         </Alert>
-      )}
+      ) : null}
 
       {/* Two columns. Left stack: catalogue, line items, activity. Right stack:
        * the merged amount + totals card, then suggestions. Both columns run the

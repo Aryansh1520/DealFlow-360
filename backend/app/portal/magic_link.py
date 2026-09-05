@@ -59,7 +59,16 @@ def issue_for_quotation(
         summary="A single-use portal link was issued for the customer.",
         payload={"portal_url": portal_url, "expires_in_hours": 24},
     )
+    # No email transport in the demo — surface the link on stdout so it's testable.
     logger.info("Portal magic link for quotation %s: %s", quotation.reference, portal_url)
+    print(
+        f"\n{'=' * 78}\n"
+        f"  PORTAL MAGIC LINK  ·  {quotation.reference}  ·  {quotation.customer.name}\n"
+        f"  {portal_url}\n"
+        f"  (single-use · expires in 24h)\n"
+        f"{'=' * 78}\n",
+        flush=True,
+    )
     return token
 
 
