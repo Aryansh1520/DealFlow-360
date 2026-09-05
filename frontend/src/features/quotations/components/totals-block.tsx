@@ -15,12 +15,25 @@ interface TotalsBlockProps {
   isFetching: boolean;
   onOpenTrace: () => void;
   className?: string;
+  /** Rendered above the totals — the builder passes the quotation header
+   * (reference, customer, headline amount) so the two merge into one card. */
+  header?: React.ReactNode;
+  /** Rendered pinned to the bottom — the builder passes the submit / cancel
+   * actions. */
+  footer?: React.ReactNode;
 }
 
 /** Gross → discount → net → tax → total, margin bar, risk chip, approval
  * preview. `FRONTEND_PHASE_2.md` Task 2d: "the rep knows before submitting,
  * not after" — every number is `computation`, nothing computed here. */
-export function TotalsBlock({ computation, isFetching, onOpenTrace, className }: TotalsBlockProps) {
+export function TotalsBlock({
+  computation,
+  isFetching,
+  onOpenTrace,
+  className,
+  header,
+  footer,
+}: TotalsBlockProps) {
   // Task 3: "the margin bar must visibly move" — flash briefly whenever the
   // total actually changes (e.g. an upsell lands), not on every re-render.
   const [flash, setFlash] = React.useState(false);
@@ -36,19 +49,38 @@ export function TotalsBlock({ computation, isFetching, onOpenTrace, className }:
     }
   }, [computation]);
 
-  if (!computation) {
-    return (
-      <div
-        className={cn(
-          "flex h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground",
-          className
-        )}
-      >
-        Add a line to see live totals.
-      </div>
-    );
-  }
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-4 overflow-y-auto rounded-lg border bg-card p-4 shadow-sm transition-all duration-300",
+        isFetching && "opacity-70",
+        flash && "ring-2 ring-info",
+        className
+      )}
+    >
+      {header}
+      {isFetching && computation && (
+        <div className="h-0.5 w-full shrink-0 animate-pulse rounded-full bg-primary/40" />
+      )}
+      {computation ? (
+        <TotalsBody computation={computation} onOpenTrace={onOpenTrace} />
+      ) : (
+        <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
+          Add a line to see live totals.
+        </div>
+      )}
+      {footer}
+    </div>
+  );
+}
 
+function TotalsBody({
+  computation,
+  onOpenTrace,
+}: {
+  computation: QuoteComputation;
+  onOpenTrace: () => void;
+}) {
   const { trace } = computation;
   const riskTone =
     trace.risk_score < trace.thresholds.t1
@@ -64,16 +96,7 @@ export function TotalsBlock({ computation, isFetching, onOpenTrace, className }:
   }[marginTone];
 
   return (
-    <div
-      className={cn(
-        "space-y-4 overflow-y-auto rounded-lg border bg-card p-4 shadow-sm transition-all duration-300",
-        isFetching && "opacity-70",
-        flash && "ring-2 ring-info",
-        className
-      )}
-    >
-      {isFetching && <div className="h-0.5 w-full animate-pulse rounded-full bg-primary/40" />}
-
+    <div className="space-y-4">
       <dl className="space-y-1.5 text-sm">
         <Row label="Gross" value={<Money minor={computation.gross_minor} currency={computation.currency} />} />
         <Row
