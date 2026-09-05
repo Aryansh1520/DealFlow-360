@@ -5,7 +5,6 @@ import { toast } from "sonner";
 
 import { VersionConflictError, getErrorMessage } from "@/lib/api-client";
 import type { QuotationRead } from "@/lib/api/types";
-import { useAuth } from "@/features/auth/auth-context";
 import {
   quotationsApi,
   type AddLinePayload,
@@ -16,11 +15,6 @@ import {
 
 const QUOTATIONS_KEY = "quotations";
 const EVENTS_PAGE_SIZE = 20;
-
-function useActor() {
-  const { user } = useAuth();
-  return { id: user?.id ?? 0, name: user?.full_name ?? "Unknown" };
-}
 
 export function useQuotations(params: QuotationListParams) {
   return useQuery({
@@ -50,9 +44,8 @@ function onVersionConflict(queryClient: ReturnType<typeof useQueryClient>, id: n
 
 export function useCreateQuotation() {
   const queryClient = useQueryClient();
-  const actor = useActor();
   return useMutation({
-    mutationFn: (payload: QuotationCreatePayload) => quotationsApi.create(payload, actor),
+    mutationFn: (payload: QuotationCreatePayload) => quotationsApi.create(payload),
     onSuccess: (quotation) => {
       queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY] });
       queryClient.setQueryData([QUOTATIONS_KEY, quotation.id], quotation);
@@ -64,9 +57,8 @@ export function useCreateQuotation() {
 
 export function useAddLine(id: number) {
   const queryClient = useQueryClient();
-  const actor = useActor();
   return useMutation({
-    mutationFn: (payload: AddLinePayload) => quotationsApi.addLine(id, payload, actor),
+    mutationFn: (payload: AddLinePayload) => quotationsApi.addLine(id, payload),
     onSuccess: (quotation) => {
       queryClient.setQueryData([QUOTATIONS_KEY, id], quotation);
       queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "events"] });
@@ -79,10 +71,9 @@ export function useAddLine(id: number) {
 
 export function useUpdateLine(id: number) {
   const queryClient = useQueryClient();
-  const actor = useActor();
   return useMutation({
     mutationFn: ({ lineId, payload }: { lineId: number; payload: UpdateLinePayload }) =>
-      quotationsApi.updateLine(id, lineId, payload, actor),
+      quotationsApi.updateLine(id, lineId, payload),
     onSuccess: (quotation) => {
       queryClient.setQueryData([QUOTATIONS_KEY, id], quotation);
       queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "events"] });
@@ -95,10 +86,9 @@ export function useUpdateLine(id: number) {
 
 export function useRemoveLine(id: number) {
   const queryClient = useQueryClient();
-  const actor = useActor();
   return useMutation({
     mutationFn: ({ lineId, expectedVersion }: { lineId: number; expectedVersion: number }) =>
-      quotationsApi.removeLine(id, lineId, expectedVersion, actor),
+      quotationsApi.removeLine(id, lineId, expectedVersion),
     onSuccess: (quotation) => {
       queryClient.setQueryData([QUOTATIONS_KEY, id], quotation);
       queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "events"] });
@@ -111,10 +101,9 @@ export function useRemoveLine(id: number) {
 
 export function useSubmitQuotation(id: number) {
   const queryClient = useQueryClient();
-  const actor = useActor();
   return useMutation({
     mutationFn: ({ expectedVersion, idempotencyKey }: { expectedVersion: number; idempotencyKey: string }) =>
-      quotationsApi.submit(id, { expected_version: expectedVersion }, idempotencyKey, actor),
+      quotationsApi.submit(id, { expected_version: expectedVersion }, idempotencyKey),
     onSuccess: (quotation) => {
       queryClient.setQueryData([QUOTATIONS_KEY, id], quotation);
       queryClient.invalidateQueries({ queryKey: [QUOTATIONS_KEY, id, "events"] });
@@ -133,7 +122,6 @@ export function useSubmitQuotation(id: number) {
 
 export function useTransitionQuotation(id: number) {
   const queryClient = useQueryClient();
-  const actor = useActor();
   return useMutation({
     mutationFn: ({
       toStatus,
@@ -149,8 +137,7 @@ export function useTransitionQuotation(id: number) {
       quotationsApi.transition(
         id,
         { expected_version: expectedVersion, to_status: toStatus, reason },
-        idempotencyKey,
-        actor
+        idempotencyKey
       ),
     onSuccess: (quotation: QuotationRead) => {
       queryClient.setQueryData([QUOTATIONS_KEY, id], quotation);
@@ -190,9 +177,8 @@ export function useSuggestions(id: number) {
 
 export function useDismissSuggestion(id: number) {
   const queryClient = useQueryClient();
-  const actor = useActor();
   return useMutation({
-    mutationFn: (productId: number) => quotationsApi.dismissSuggestion(id, productId, actor),
+    mutationFn: (productId: number) => quotationsApi.dismissSuggestion(id, productId),
     onMutate: async (productId) => {
       await queryClient.cancelQueries({ queryKey: [QUOTATIONS_KEY, id, "suggestions"] });
       const previous = queryClient.getQueryData([QUOTATIONS_KEY, id, "suggestions"]);

@@ -4,16 +4,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { getErrorMessage } from "@/lib/api-client";
-import { useAuth } from "@/features/auth/auth-context";
 import { approvalsApi, type ApprovalQueueParams } from "@/features/approvals/api";
 import { QUOTATIONS_KEY } from "@/features/quotations/hooks";
 
 const APPROVALS_KEY = "approvals";
-
-function useActor() {
-  const { user } = useAuth();
-  return { id: user?.id ?? 0, name: user?.full_name ?? "Unknown" };
-}
 
 export function useApprovalQueue(params: ApprovalQueueParams) {
   return useQuery({
@@ -39,7 +33,6 @@ export function useApprovalChain(quotationId: number | null) {
 
 export function useActOnApproval(id: number) {
   const queryClient = useQueryClient();
-  const actor = useActor();
   return useMutation({
     mutationFn: ({
       action,
@@ -49,7 +42,7 @@ export function useActOnApproval(id: number) {
       action: "approve" | "reject" | "return_for_revision";
       reason?: string;
       idempotencyKey: string;
-    }) => approvalsApi.act(id, { action, reason }, idempotencyKey, actor),
+    }) => approvalsApi.act(id, { action, reason }, idempotencyKey),
     onSuccess: (quotation) => {
       queryClient.invalidateQueries({ queryKey: [APPROVALS_KEY] });
       queryClient.setQueryData([QUOTATIONS_KEY, quotation.id], quotation);

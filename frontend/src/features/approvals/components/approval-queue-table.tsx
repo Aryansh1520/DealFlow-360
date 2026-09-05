@@ -65,8 +65,8 @@ export function ApprovalQueueTable({ level }: { level?: string }) {
                 ))}
               </TableRow>
             ))
-          ) : data && data.length > 0 ? (
-            data.map((approval) => (
+          ) : data && data.items.length > 0 ? (
+            data.items.map((approval) => (
               <TableRow
                 key={approval.id}
                 className="cursor-pointer"
