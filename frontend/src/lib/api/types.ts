@@ -72,6 +72,7 @@ export type QuoteEventRead = S["QuoteEventRead"];
 export type PreviewRequest = S["PreviewRequest"];
 export type PreviewLine = S["PreviewLine"];
 export type SubmitRequest = S["SubmitRequest"];
+export type SuggestionRead = S["SuggestionRead"];
 
 // ---- Decision trace (Phase 2) -----------------------------------------------------------
 export type DecisionTrace = S["DecisionTrace"];
