@@ -51,13 +51,20 @@ DEFAULT_ROLES = [
     {
         "name": "sales_rep",
         "description": "Builds and owns quotations",
-        "permissions": ["catalog:read", "quotations:read", "quotations:write", "dashboard:read"],
+        "permissions": [
+            "catalog:read",
+            "customers:read",
+            "quotations:read",
+            "quotations:write",
+            "dashboard:read",
+        ],
     },
     {
         "name": "sales_manager",
         "description": "L1 approver; manages catalogue pricing",
         "permissions": [
             "catalog:read",
+            "customers:read",
             "pricing:read",
             "pricing:write",
             "quotations:read",
