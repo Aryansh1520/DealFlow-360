@@ -4,7 +4,11 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { toast } from "sonner";
 
 import { getErrorMessage } from "@/lib/api-client";
-import { dashboardApi, type DealHealthParams } from "@/features/dashboard/api";
+import {
+  dashboardApi,
+  type DealHealthExportFilters,
+  type DealHealthParams,
+} from "@/features/dashboard/api";
 
 const DASHBOARD_KEY = "dashboard";
 
@@ -21,6 +25,13 @@ export function useDealHealth(params: DealHealthParams) {
     queryKey: [DASHBOARD_KEY, "deal-health", params],
     queryFn: () => dashboardApi.dealHealth(params),
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useExportDealHealth(filters: DealHealthExportFilters) {
+  return useMutation({
+    mutationFn: (format: "pdf" | "xlsx") => dashboardApi.exportDealHealth(format, filters),
+    onError: (error) => toast.error(getErrorMessage(error)),
   });
 }
 

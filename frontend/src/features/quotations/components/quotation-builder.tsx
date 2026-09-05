@@ -9,11 +9,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { BpsInput } from "@/components/ui/bps-input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Money } from "@/components/ui/money";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
+import { formatBps } from "@/lib/money";
 import { getErrorMessage } from "@/lib/api-client";
 import { useIdempotencyKey } from "@/lib/api/idempotency";
 import { useInvalidateOnFrame, useLiveEvents } from "@/lib/live/use-live-events";
@@ -30,6 +30,7 @@ import { UpsellPanel } from "@/features/quotations/components/upsell-panel";
 import { editorReducer, quotationToEditorState } from "@/features/quotations/editor-reducer";
 import {
   useAddLine,
+  usePendingCounter,
   useQuotation,
   useRemoveLine,
   useSubmitQuotation,
@@ -55,6 +56,8 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
   // without a refresh — the two-window demo money shot.
   const invalidateOnFrame = useInvalidateOnFrame();
   const { connected: live } = useLiveEvents(`quote:${quotationId}`, invalidateOnFrame);
+
+  const pendingCounter = usePendingCounter(quotationId);
 
   // Manual escape hatch — one click re-pulls the quote, its timeline, the
   // suggestions and the decision trace (all keyed under ["quotations", id]).
@@ -147,10 +150,20 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
   const canSubmit = quotation.status === "draft" || quotation.status === "returned_for_revision";
   const canSend = allowedTransitions.includes("sent");
 
+  // While a counter-offer is open the rep may not stage MORE than the customer
+  // asked for. With no open counter the field is unrestricted (the 0–100% clamp
+  // still applies). Line-scoped counters carry an order-level ask too, so they
+  // cap the same way.
+  const orderDiscountCap =
+    pendingCounter && pendingCounter.requestedBps > 0 ? pendingCounter.requestedBps : null;
+  const orderDiscountOverCap =
+    orderDiscountCap != null && editorState.orderDiscountBps > orderDiscountCap;
+
   const orderDiscountDirty = editorState.orderDiscountBps !== quotation.order_discount_bps;
   const orderDiscountBlocked = computation?.trace.outcome === "blocked";
   const commitOrderDiscount = () => {
     if (editorState.orderDiscountBps === quotation.order_discount_bps) return;
+    if (orderDiscountOverCap) return;
     updateQuotation.mutate({
       expected_version: quotation.version,
       order_discount_bps: editorState.orderDiscountBps,
@@ -222,9 +235,10 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
       })
       .catch(() => {});
 
-  // The quotation header (reference, customer, headline amount) and the submit /
-  // cancel actions are handed to <TotalsBlock> as its `header` / `footer` so the
-  // amount and the live totals read as one card.
+  // The quotation header (reference, customer) and the submit / cancel actions are
+  // handed to <TotalsBlock> as its `header` / `footer` so they read as one card.
+  // The headline amount is intentionally omitted — the live "Total" row in the
+  // body is the single source of truth, and dropping it keeps the card scroll-free.
   const summaryHeader = (
     <div className="shrink-0">
       <div className="flex items-center gap-2">
@@ -234,9 +248,6 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
       <p className="mt-1 text-sm text-muted-foreground">
         {quotation.customer_name} · <span className="capitalize">{quotation.customer_tier}</span> ·{" "}
         {quotation.owner_rep_name}
-      </p>
-      <p className="mt-2 text-xl font-semibold tabular-nums">
-        <Money minor={quotation.computation.total_minor} currency={quotation.currency} />
       </p>
       <Separator className="mt-3" />
     </div>
@@ -356,14 +367,15 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
                 <div className="min-w-0">
                   <h2 className="text-sm font-semibold">Order discount</h2>
                   <p className="text-xs text-muted-foreground">
-                    Applied across every line, on top of any per-line discount. Changing it
-                    re-checks approval.
+                    Applied across every line, on top of any per-line discount. Re-checks
+                    approval; the customer isn&apos;t notified until you Send.
                   </p>
                 </div>
                 <div className="w-28 shrink-0">
                   <BpsInput
                     ref={orderDiscountRef}
                     value={editorState.orderDiscountBps}
+                    maxBps={orderDiscountCap ?? undefined}
                     onChange={(bps) => dispatch({ type: "set_order_discount", discountBps: bps })}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -375,6 +387,17 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
                   />
                 </div>
               </div>
+              {orderDiscountCap != null && (
+                <p
+                  className={cn(
+                    "text-xs",
+                    orderDiscountOverCap ? "font-medium text-danger" : "text-muted-foreground"
+                  )}
+                >
+                  Capped at the {formatBps(orderDiscountCap)} {pendingCounter?.event.actor_name} asked
+                  for — decline the counter to go higher.
+                </p>
+              )}
               {orderDiscountBlocked && (
                 <p className="text-xs font-medium text-danger">
                   This discount prices a line below cost — it can’t be applied. Lower it first.
@@ -396,7 +419,7 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
                   </Button>
                   <Button
                     size="sm"
-                    disabled={updateQuotation.isPending || orderDiscountBlocked}
+                    disabled={updateQuotation.isPending || orderDiscountBlocked || orderDiscountOverCap}
                     onClick={commitOrderDiscount}
                   >
                     Apply order discount

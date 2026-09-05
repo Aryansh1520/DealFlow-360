@@ -6,19 +6,9 @@ import { Check, Loader2, MessageSquareQuote, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { formatBps } from "@/lib/money";
-import type { QuotationRead, QuoteEventRead } from "@/lib/api/types";
+import type { QuotationRead } from "@/lib/api/types";
 import { useAuth } from "@/features/auth/auth-context";
-import { useQuotationEvents, useRejectCounter } from "@/features/quotations/hooks";
-
-// Events that count as the rep having responded to the counter — once one of these
-// lands after the counter, the banner is done.
-const REP_RESPONSE = new Set([
-  "quote.discount_changed",
-  "quote.line_added",
-  "quote.line_updated",
-  "quote.line_removed",
-  "quote.counter_rejected",
-]);
+import { usePendingCounter, useRejectCounter } from "@/features/quotations/hooks";
 
 /**
  * Surfaces the customer's most recent counter-offer as an action, not a buried
@@ -39,35 +29,19 @@ export function CounterRequestBanner({
 }) {
   const { hasPermission } = useAuth();
   const [dismissed, setDismissed] = React.useState(false);
-  const { data } = useQuotationEvents(quotation.id);
+  const pending = usePendingCounter(quotation.id);
   const reject = useRejectCounter(quotation.id);
 
-  const events: QuoteEventRead[] = React.useMemo(
-    () => (data?.pages ?? []).flatMap((p) => p.items),
-    [data]
-  );
+  if (!pending || dismissed || !hasPermission("quotations:write")) return null;
 
-  const counter = React.useMemo(() => {
-    const c = events.find((e) => e.event_type === "quote.customer_countered");
-    if (!c) return null;
-    const respondedAfter = events.some(
-      (e) => REP_RESPONSE.has(e.event_type) && e.created_at > c.created_at
-    );
-    return respondedAfter ? null : c;
-  }, [events]);
-
-  if (!counter || dismissed || !hasPermission("quotations:write")) return null;
-
-  const requestedBps = Number(counter.payload?.requested_discount_bps ?? 0);
-  const message = (counter.payload?.message as string | undefined) ?? null;
-  const lineScoped = counter.payload?.line_id != null;
+  const { requestedBps, message, lineScoped } = pending;
 
   return (
     <Alert variant="warning">
       <MessageSquareQuote className="h-4 w-4" />
       <AlertTitle className="flex items-center justify-between">
         <span>
-          {counter.actor_name} requested a {formatBps(requestedBps)} discount
+          {pending.event.actor_name} requested a {formatBps(requestedBps)} discount
           {lineScoped ? " on one line" : ""}
         </span>
         <Button

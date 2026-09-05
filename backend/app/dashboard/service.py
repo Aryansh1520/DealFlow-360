@@ -352,13 +352,19 @@ def _alert_to_read(db: Session, alert: DealAlert, ref_cache: dict[int, str]) -> 
 
 
 def list_deal_health(
-    db: Session, params: PageParams, owner_rep_id: int | None, stage: str | None
+    db: Session,
+    params: PageParams,
+    owner_rep_id: int | None,
+    stage: str | None,
+    active_since: datetime | None = None,
 ) -> tuple[list[DealHealthRow], int]:
     stmt = select(DealMetric)
     if owner_rep_id is not None:
         stmt = stmt.where(DealMetric.owner_rep_id == owner_rep_id)
     if stage:
         stmt = stmt.where(DealMetric.stage == stage)
+    if active_since is not None:
+        stmt = stmt.where(DealMetric.last_activity_at >= active_since)
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = db.scalars(

@@ -62,6 +62,21 @@ const STATUS_COPY: Record<string, { label: string; tone: string }> = {
   cancelled: { label: "Cancelled", tone: "text-muted-foreground" },
 };
 
+/** The only ledger events that mean the rep/system genuinely pushed something to
+ * the customer. Internal edits (`quote.discount_changed`, `quote.line_*`,
+ * `quote.submitted`, upsell churn) and the customer's own actions never appear —
+ * so "Apply order discount" is silent on the portal and only "Send to customer"
+ * surfaces here. */
+const PORTAL_LIVE_EVENTS = new Set([
+  "quote.sent",
+  "quote.counter_rejected",
+  "quote.rejected",
+  "quote.cancelled",
+  "quote.expired",
+  "quote.invoiced",
+  "quote.payment_recorded",
+]);
+
 export function NegotiationScreen({ quotationId }: { quotationId: number }) {
   const {
     data: quote,
@@ -72,11 +87,14 @@ export function NegotiationScreen({ quotationId }: { quotationId: number }) {
     isRefetching,
   } = usePortalQuotation(quotationId);
 
-  // Live changes from the rep are *queued*, not applied under the customer's
-  // feet — the totals shouldn't jump around mid-read. Each rep/system frame
-  // bumps a counter; the customer chooses when to pull them in. Frames for the
-  // customer's own actions (`quote.customer_*`, plus the status hop those cause)
-  // are ignored: `muteLive()` is called from every portal mutation's onSuccess.
+  // The customer only ever sees what the rep has explicitly *pushed* to them.
+  // Internal edits — applying an order discount, tweaking a line, submitting for
+  // approval — must not surface here; the customer keeps seeing the terms they
+  // were last sent until the rep clicks "Send to customer" (a `quote.sent`).
+  // Live changes are queued, not applied under the customer's feet: each matching
+  // frame bumps a counter the customer chooses when to pull in. `muteLive()` is
+  // called from every portal mutation's onSuccess to swallow the echo of the
+  // customer's own action.
   const [pendingUpdates, setPendingUpdates] = React.useState(0);
   const mutedUntilRef = React.useRef(0);
   const muteLive = React.useCallback(() => {
@@ -84,8 +102,7 @@ export function NegotiationScreen({ quotationId }: { quotationId: number }) {
   }, []);
 
   const { connected } = useLiveEvents(`quote:${quotationId}`, (frame) => {
-    if (frame.event_type === "heartbeat") return;
-    if (frame.event_type.startsWith("quote.customer_")) return;
+    if (!PORTAL_LIVE_EVENTS.has(frame.event_type)) return;
     if (Date.now() < mutedUntilRef.current) return;
     setPendingUpdates((n) => n + 1);
   });

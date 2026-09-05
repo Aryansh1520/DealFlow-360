@@ -1,10 +1,18 @@
 "use client";
 
 import * as React from "react";
+import { AlertTriangle, Bell, Layers, PauseCircle, Timer } from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Money } from "@/components/ui/money";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/page-header";
 import { useInvalidateOnFrame, useLiveEvents } from "@/lib/live/use-live-events";
 import { PermissionGuard } from "@/features/auth/components/permission-guard";
@@ -19,8 +27,10 @@ export function DealHealthScreen() {
   const invalidate = useInvalidateOnFrame();
   const { connected } = useLiveEvents("dashboard", invalidate);
 
-  const { data: dealHealth, isLoading } = useDealHealth({ page_size: 200 });
+  const { data: dealHealth, isLoading } = useDealHealth({ page_size: 100 });
   const { data: alerts } = useAlerts({ acknowledged: false });
+
+  const [alertsOpen, setAlertsOpen] = React.useState(false);
 
   const rows = dealHealth?.data.items ?? [];
   const currency = rows[0]?.currency ?? "INR";
@@ -36,55 +46,146 @@ export function DealHealthScreen() {
     <PermissionGuard permissions={["dashboard:read"]}>
       <PageHeader
         title="Deal health"
-        description="A denormalised read model — every row is strongly consistent with the event ledger."
+        description="Every open deal, its margin and risk, and anything the system has flagged."
+        actions={
+          <div className="flex items-center gap-2">
+            <LivePill connected={connected} />
+            <Button
+              variant={openAlerts > 0 ? "destructive" : "outline"}
+              size="sm"
+              onClick={() => setAlertsOpen(true)}
+            >
+              <Bell className="h-4 w-4" />
+              Alerts
+              {openAlerts > 0 && (
+                <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white/25 px-1 text-[10px] font-semibold leading-none text-white">
+                  {openAlerts > 99 ? "99+" : openAlerts}
+                </span>
+              )}
+            </Button>
+          </div>
+        }
       />
 
-      {isLoading ? (
-        <Skeleton className="h-24 w-full" />
-      ) : (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <Tile label="Open deals" value={openDeals} />
-          <Tile
-            label="Value in approval"
-            value={<Money minor={valueInApproval} currency={currency} compact />}
-          />
-          <Tile label="Stalled" value={stalledCount} />
-          <Tile label="Open alerts" value={openAlerts} />
-        </div>
-      )}
-
-      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="min-w-0">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Deals
-          </h2>
-          <DealHealthTable />
-          {dealHealth && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Served from a denormalised read model · {dealHealth.elapsedMs}ms
-              {connected ? " · live" : ""}
-            </p>
-          )}
-        </section>
-
-        <section className="min-w-0">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Alerts
-          </h2>
-          <AlertsList alerts={alerts?.items ?? []} />
-        </section>
+      {/* KPI strip — four equal cells, one glance. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[4.5rem]" />)
+        ) : (
+          <>
+            <KpiTile icon={Layers} label="Open deals" value={openDeals} />
+            <KpiTile
+              icon={Timer}
+              label="Value in approval"
+              value={<Money minor={valueInApproval} currency={currency} compact />}
+            />
+            <KpiTile
+              icon={PauseCircle}
+              label="Stalled"
+              value={stalledCount}
+              tone={stalledCount > 0 ? "warning" : "neutral"}
+            />
+            <KpiTile
+              icon={AlertTriangle}
+              label="Open alerts"
+              value={openAlerts}
+              tone={openAlerts > 0 ? "danger" : "neutral"}
+              onClick={() => setAlertsOpen(true)}
+            />
+          </>
+        )}
       </div>
+
+      {/* The deals table owns the full width; alerts live in the modal above. */}
+      <div className="mt-6">
+        <DealHealthTable />
+      </div>
+
+      <Dialog open={alertsOpen} onOpenChange={setAlertsOpen}>
+        <DialogContent className="max-w-xl gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b px-4 py-3 pr-10 text-left">
+            <DialogTitle className="flex items-center gap-2 text-base">
+              Alerts
+              {openAlerts > 0 && (
+                <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
+                  {openAlerts}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[70vh] overflow-y-auto">
+            <AlertsList alerts={alerts?.items ?? []} bare />
+          </div>
+        </DialogContent>
+      </Dialog>
     </PermissionGuard>
   );
 }
 
-function Tile({ label, value }: { label: string; value: React.ReactNode }) {
+function LivePill({ connected }: { connected: boolean }) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-      </CardContent>
-    </Card>
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium text-muted-foreground"
+      title={connected ? "Live — updates stream in automatically" : "Reconnecting…"}
+    >
+      <span
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          connected ? "animate-pulse bg-positive" : "bg-muted-foreground/40"
+        )}
+      />
+      {connected ? "Live" : "Offline"}
+    </span>
+  );
+}
+
+const TILE_TONES = {
+  neutral: "bg-muted text-muted-foreground",
+  warning: "bg-warning/10 text-warning",
+  danger: "bg-danger/10 text-danger",
+} as const;
+
+function KpiTile({
+  icon: Icon,
+  label,
+  value,
+  tone = "neutral",
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: React.ReactNode;
+  tone?: keyof typeof TILE_TONES;
+  onClick?: () => void;
+}) {
+  const className = cn(
+    "flex items-center gap-3 rounded-lg border bg-card p-4 text-left text-card-foreground shadow-sm",
+    onClick && "w-full transition-colors hover:bg-muted/40"
+  );
+  const inner = (
+    <>
+      <span
+        className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+          TILE_TONES[tone]
+        )}
+      >
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+        <p className="text-xl font-semibold leading-tight tabular-nums">{value}</p>
+      </div>
+    </>
+  );
+
+  return onClick ? (
+    <button type="button" onClick={onClick} className={className}>
+      {inner}
+    </button>
+  ) : (
+    <div className={className}>{inner}</div>
   );
 }

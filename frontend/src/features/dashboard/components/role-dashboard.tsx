@@ -62,18 +62,18 @@ export function RoleDashboard() {
 
           {data.data.alerts.length > 0 && (
             <div className="mt-8">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  Open alerts
-                </h2>
-                <Link
-                  href="/dashboard/deal-health"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  All alerts <ArrowRight className="h-3 w-3" />
-                </Link>
-              </div>
-              <AlertsList alerts={data.data.alerts} compact />
+              <AlertsList
+                alerts={data.data.alerts}
+                compact
+                action={
+                  <Link
+                    href="/dashboard/deal-health"
+                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                  >
+                    All alerts <ArrowRight className="h-3 w-3" />
+                  </Link>
+                }
+              />
             </div>
           )}
         </>

@@ -38,9 +38,48 @@ def deal_health(
     params: Annotated[PageParams, Depends()],
     owner_rep_id: Annotated[int | None, Query()] = None,
     stage: Annotated[str | None, Query()] = None,
+    active_since: Annotated[datetime | None, Query()] = None,
 ):
-    rows, total = service.list_deal_health(db, params, owner_rep_id, stage)
+    rows, total = service.list_deal_health(db, params, owner_rep_id, stage, active_since)
     return ok(Page[DealHealthRow].create(rows, total, params), "Deal health retrieved.")
+
+
+@router.get("/dashboard/deal-health/export", dependencies=[DashboardRead])
+def export_deal_health(
+    current_user: CurrentUser,
+    db: DbSession,
+    format: Annotated[Literal["pdf", "xlsx"], Query()],
+    owner_rep_id: Annotated[int | None, Query()] = None,
+    stage: Annotated[str | None, Query()] = None,
+    active_since: Annotated[datetime | None, Query()] = None,
+) -> Response:
+    big_params = PageParams(page=1, page_size=100)
+    rows: list[DealHealthRow] = []
+    while True:
+        page_rows, total = service.list_deal_health(
+            db, big_params, owner_rep_id, stage, active_since
+        )
+        rows.extend(page_rows)
+        if big_params.page * big_params.page_size >= total or not page_rows:
+            break
+        big_params.page += 1
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    if format == "xlsx":
+        data = _deal_rows_to_xlsx(rows)
+        media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        key = f"exports/deal-health-{stamp}.xlsx"
+    else:
+        data = _deal_rows_to_pdf(rows)
+        media = "application/pdf"
+        key = f"exports/deal-health-{stamp}.pdf"
+
+    put_object(key, data, content_type=media)
+    return Response(
+        content=data,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{key.split("/")[-1]}"'},
+    )
 
 
 @router.get(
@@ -134,6 +173,69 @@ def export_sales_report(
         media_type=media,
         headers={"Content-Disposition": f'attachment; filename="{key.split("/")[-1]}"'},
     )
+
+
+def _deal_rows_to_xlsx(rows: list[DealHealthRow]) -> bytes:
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Deal health"
+    ws.append(
+        ["Reference", "Customer", "Owner", "Stage", "Total", "Margin %", "Risk", "Idle (days)", "Flags"]
+    )
+    for r in rows:
+        ws.append(
+            [
+                r.reference,
+                r.customer_name,
+                r.owner_rep_name,
+                r.stage,
+                r.total_minor / 100,
+                round(r.margin_bps / 100, 2),
+                r.risk_score,
+                r.days_inactive,
+                ", ".join(r.flags),
+            ]
+        )
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+def _deal_rows_to_pdf(rows: list[DealHealthRow]) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
+
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 20 * mm
+    pdf.setFont("Helvetica-Bold", 14)
+    pdf.drawString(20 * mm, y, "Deal health")
+    pdf.setFont("Helvetica", 8)
+    y -= 10 * mm
+    pdf.drawString(
+        20 * mm, y, "Reference        Customer            Owner            Stage         Total       Risk  Idle  Flags"
+    )
+    y -= 5 * mm
+    for r in rows:
+        if y < 20 * mm:
+            pdf.showPage()
+            pdf.setFont("Helvetica", 8)
+            y = height - 20 * mm
+        pdf.drawString(
+            20 * mm,
+            y,
+            f"{r.reference:<15.15}  {r.customer_name:<18.18}  {r.owner_rep_name:<15.15}  "
+            f"{r.stage:<12.12}  {format_minor(r.total_minor, r.currency):>12}  {r.risk_score:>4}  "
+            f"{r.days_inactive:>4}  {', '.join(r.flags):.20}",
+        )
+        y -= 5 * mm
+    pdf.showPage()
+    pdf.save()
+    return buffer.getvalue()
 
 
 def _rows_to_xlsx(rows: list[SalesReportRow]) -> bytes:

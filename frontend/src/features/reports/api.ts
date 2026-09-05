@@ -11,12 +11,19 @@ export interface SalesReportFilters {
 }
 
 export const reportsApi = {
+  /** Pulls up to `pageSize` rows (the backend caps this at 100); the table
+   * paginates that slice client-side so the summary total and the revenue-by-rep
+   * chart stay accurate for what's loaded. When `total` exceeds what came back,
+   * the screen shows a "narrow the filters or export" notice. Exports go through
+   * `/reports/sales/export`, which walks every page server-side — pagination here
+   * never limits a download. */
   sales: async (
     filters: SalesReportFilters,
-    page = 1
+    page = 1,
+    pageSize = 100
   ): Promise<Page<SalesReportRow>> => {
     const { data } = await apiClient.get<Page<SalesReportRow>>("/reports/sales", {
-      params: { ...filters, page, page_size: 100 },
+      params: { ...filters, page, page_size: pageSize },
     });
     return data;
   },

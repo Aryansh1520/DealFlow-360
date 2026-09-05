@@ -176,7 +176,7 @@ function ApprovalPreview({
   if (requiredApprovals.length === 0) {
     return (
       <div className="rounded-md bg-positive/10 px-3 py-2 text-sm text-positive">
-        Will auto-approve — no approval required.
+        Will auto-approve.
       </div>
     );
   }

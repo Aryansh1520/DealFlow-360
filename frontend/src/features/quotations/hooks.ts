@@ -1,10 +1,11 @@
 "use client";
 
+import * as React from "react";
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { VersionConflictError, getErrorMessage } from "@/lib/api-client";
-import type { QuotationRead } from "@/lib/api/types";
+import type { QuotationRead, QuoteEventRead } from "@/lib/api/types";
 import {
   quotationsApi,
   type AddLinePayload,
@@ -201,6 +202,45 @@ export function useQuotationEvents(id: number) {
     initialPageParam: 1,
     getNextPageParam: (lastPage) => (lastPage.page < lastPage.pages ? lastPage.page + 1 : undefined),
   });
+}
+
+// A rep "responds" to a counter by changing a discount / line, or by declining it.
+const COUNTER_RESPONDED = new Set([
+  "quote.discount_changed",
+  "quote.line_added",
+  "quote.line_updated",
+  "quote.line_removed",
+  "quote.counter_rejected",
+]);
+
+export interface PendingCounter {
+  event: QuoteEventRead;
+  /** The discount the customer asked for, in basis points. */
+  requestedBps: number;
+  message: string | null;
+  lineScoped: boolean;
+}
+
+/** The customer's most recent counter-offer that the rep hasn't responded to yet.
+ * `null` when there is no open counter. Shared by the builder banner and the
+ * order-discount cap so both agree on what "requested" means. */
+export function usePendingCounter(id: number): PendingCounter | null {
+  const { data } = useQuotationEvents(id);
+  return React.useMemo(() => {
+    const events = (data?.pages ?? []).flatMap((p) => p.items);
+    const countered = events.find((e) => e.event_type === "quote.customer_countered");
+    if (!countered) return null;
+    const responded = events.some(
+      (e) => COUNTER_RESPONDED.has(e.event_type) && e.created_at > countered.created_at
+    );
+    if (responded) return null;
+    return {
+      event: countered,
+      requestedBps: Number(countered.payload?.requested_discount_bps ?? 0),
+      message: (countered.payload?.message as string | undefined) ?? null,
+      lineScoped: countered.payload?.line_id != null,
+    };
+  }, [data]);
 }
 
 export function useDecisionTrace(id: number, enabled = true) {

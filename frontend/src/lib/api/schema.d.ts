@@ -1228,6 +1228,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboard/deal-health/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Deal Health */
+        get: operations["export_deal_health_api_v1_dashboard_deal_health_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard/alerts": {
         parameters: {
             query?: never;
@@ -7610,6 +7627,7 @@ export interface operations {
             query?: {
                 owner_rep_id?: number | null;
                 stage?: string | null;
+                active_since?: string | null;
                 /** @description Page number (1-based) */
                 page?: number;
                 /** @description Items per page */
@@ -7634,6 +7652,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuccessResponse_Page_DealHealthRow__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_deal_health_api_v1_dashboard_deal_health_export_get: {
+        parameters: {
+            query: {
+                format: "pdf" | "xlsx";
+                owner_rep_id?: number | null;
+                stage?: string | null;
+                active_since?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

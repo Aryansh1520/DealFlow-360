@@ -5,7 +5,6 @@ import { Download, FileSpreadsheet, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Money } from "@/components/ui/money";
 import {
@@ -34,7 +33,16 @@ import { useUsers } from "@/features/users/hooks";
 import type { SalesReportFilters } from "@/features/reports/api";
 import { useExportReport, useSalesReport } from "@/features/reports/hooks";
 
-const thisMonth = () => new Date().toISOString().slice(0, 7);
+const PAGE_SIZE = 20;
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const CURRENT = new Date();
+const YEARS = Array.from({ length: 6 }, (_, i) => CURRENT.getFullYear() - i);
+
+const thisMonth = () =>
+  `${CURRENT.getFullYear()}-${String(CURRENT.getMonth() + 1).padStart(2, "0")}`;
 
 export function ReportsScreen() {
   const { hasPermission } = useAuth();
@@ -46,6 +54,10 @@ export function ReportsScreen() {
   const [repId, setRepId] = React.useState("all");
   const [status, setStatus] = React.useState("all");
   const [categoryId, setCategoryId] = React.useState("all");
+  const [page, setPage] = React.useState(1);
+
+  // Any filter change resets to the first page.
+  React.useEffect(() => setPage(1), [period, repId, status, categoryId]);
 
   const filters: SalesReportFilters = {
     period: period || undefined,
@@ -60,8 +72,13 @@ export function ReportsScreen() {
 
   const totalValue = rows.reduce((sum, r) => sum + r.total_minor, 0);
   const currency = rows[0]?.currency ?? "INR";
+  const capped = (data?.total ?? 0) > rows.length;
 
-  // Simple revenue-by-rep bar chart (no chart library).
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  // Revenue-by-rep, across the whole filtered set (not just the visible page).
   const byRep = React.useMemo(() => {
     const map = new Map<string, number>();
     for (const r of rows) map.set(r.owner_rep_name, (map.get(r.owner_rep_name) ?? 0) + r.total_minor);
@@ -75,8 +92,8 @@ export function ReportsScreen() {
 
       <Card className="mb-6">
         <CardContent className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Period (month)">
-            <Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} />
+          <Field label="Period">
+            <PeriodSelect value={period} onChange={setPeriod} />
           </Field>
           <Field label="Rep">
             <Select value={repId} onValueChange={setRepId}>
@@ -134,7 +151,10 @@ export function ReportsScreen() {
           <Money minor={totalValue} currency={currency} className="font-medium text-foreground" />
         </p>
         {hasPermission("reports:export") && (
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <span className="hidden text-xs text-muted-foreground sm:inline">
+              Exports the full filtered set
+            </span>
             <Button
               variant="outline"
               size="sm"
@@ -192,38 +212,75 @@ export function ReportsScreen() {
           Nothing matches these filters.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Period</TableHead>
-                <TableHead>Reference</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Rep</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Margin</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.quotation_id}>
-                  <TableCell>{row.period}</TableCell>
-                  <TableCell className="font-mono text-xs">{row.reference}</TableCell>
-                  <TableCell>{row.customer_name}</TableCell>
-                  <TableCell className="text-muted-foreground">{row.owner_rep_name}</TableCell>
-                  <TableCell className="capitalize">{row.status}</TableCell>
-                  <TableCell className="text-right">
-                    <Money minor={row.total_minor} currency={row.currency} />
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatBps(row.margin_bps)}
-                  </TableCell>
+        <>
+          {capped && (
+            <p className="mb-3 text-xs text-muted-foreground">
+              Showing the first {rows.length} of {data?.total} rows — narrow the filters, or
+              export for the complete set.
+            </p>
+          )}
+          <div className="overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Period</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Rep</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Margin</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {pageRows.map((row) => (
+                  <TableRow key={row.quotation_id}>
+                    <TableCell className="whitespace-nowrap tabular-nums">{row.period}</TableCell>
+                    <TableCell className="font-mono text-xs">{row.reference}</TableCell>
+                    <TableCell>{row.customer_name}</TableCell>
+                    <TableCell className="text-muted-foreground">{row.owner_rep_name}</TableCell>
+                    <TableCell className="capitalize">{row.status}</TableCell>
+                    <TableCell className="text-right">
+                      <Money minor={row.total_minor} currency={row.currency} />
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatBps(row.margin_bps)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          {rows.length > PAGE_SIZE && (
+            <div className="mt-3 flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                Page {safePage} of {pageCount}
+                <span className="hidden sm:inline"> · rows {(safePage - 1) * PAGE_SIZE + 1}–
+                  {Math.min(safePage * PAGE_SIZE, rows.length)} of {rows.length}
+                </span>
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={safePage >= pageCount}
+                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </PermissionGuard>
   );
@@ -234,6 +291,55 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>
       {children}
+    </div>
+  );
+}
+
+/** Year + month, emitting "YYYY-MM" (or "" for all-time). */
+function PeriodSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [yearStr, monthStr] = value ? value.split("-") : ["", ""];
+  const year = value ? yearStr : "all";
+  const month = value ? String(Number(monthStr)) : String(CURRENT.getMonth() + 1);
+
+  const setYear = (next: string) => {
+    if (next === "all") return onChange("");
+    const mm = value ? Number(monthStr) : CURRENT.getMonth() + 1;
+    onChange(`${next}-${String(mm).padStart(2, "0")}`);
+  };
+  const setMonth = (next: string) => {
+    const yy = value ? yearStr : String(CURRENT.getFullYear());
+    onChange(`${yy}-${String(Number(next)).padStart(2, "0")}`);
+  };
+
+  return (
+    <div className="flex gap-2">
+      <Select value={year} onValueChange={setYear}>
+        <SelectTrigger className="w-28 shrink-0">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All time</SelectItem>
+          {YEARS.map((y) => (
+            <SelectItem key={y} value={String(y)}>
+              {y}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {value && (
+        <Select value={month} onValueChange={setMonth}>
+          <SelectTrigger className="min-w-0 flex-1">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {MONTHS.map((name, i) => (
+              <SelectItem key={name} value={String(i + 1)}>
+                {name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }

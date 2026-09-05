@@ -226,24 +226,12 @@ def update_quotation(db: Session, quotation: Quotation, payload: QuotationUpdate
         payload={"order_discount_bps": quotation.order_discount_bps},
     )
 
-    # A discount change on a quote the customer is already holding reopens
-    # negotiation — they aren't left staring at stale terms, and the rep has an
-    # explicit re-send step. `sent -> under_negotiation` is a legal edge.
-    if order_discount_changed and quotation.status == QuoteStatus.SENT.value:
-        from app.quotations.transitions import transition  # local: avoids an import cycle
-
-        transition(
-            db,
-            quotation,
-            QuoteStatus.UNDER_NEGOTIATION.value,
-            actor,
-            expected_version=quotation.version,
-        )
-
-    # Re-run the engine only when pricing actually moved (a discount change), not
-    # for a valid-until edit. `revalidate_after_line_change` re-routes for approval
-    # if the new *absolute* terms breach policy — so a discount can't be walked past
-    # the ceiling one counter-offer at a time.
+    # Applying an order discount is an internal edit — it does NOT notify the
+    # customer. The rep pushes the new terms explicitly via "Send to customer"
+    # (a `sent` transition). Re-run the engine on any discount change though, so a
+    # breaching discount is routed for approval and can't be walked past the
+    # ceiling one counter-offer at a time. (`valid_until`-only edits don't touch
+    # pricing, so they skip this.)
     if order_discount_changed:
         _revalidate_approvals(db, quotation, actor)
     db.commit()

@@ -11,6 +11,10 @@ interface BpsInputProps
   value: number;
   /** Emits basis points. */
   onChange: (bps: number) => void;
+  /** Optional lower / upper bound, in basis points. Values outside are clamped
+   * before they're emitted (and the field snaps to the bound on blur). */
+  minBps?: number;
+  maxBps?: number;
 }
 
 /**
@@ -18,9 +22,19 @@ interface BpsInputProps
  * ceiling and tax field in a form uses this — `FRONTEND_PHASE_1.md` Task 7.
  */
 export const BpsInput = React.forwardRef<HTMLInputElement, BpsInputProps>(
-  ({ value, onChange, className, ...props }, ref) => {
+  ({ value, onChange, className, minBps, maxBps, ...props }, ref) => {
     const [text, setText] = React.useState(() => (value / 100).toString());
     const focused = React.useRef(false);
+
+    const clamp = React.useCallback(
+      (bps: number) => {
+        let v = bps;
+        if (minBps != null) v = Math.max(minBps, v);
+        if (maxBps != null) v = Math.min(maxBps, v);
+        return v;
+      },
+      [minBps, maxBps]
+    );
 
     React.useEffect(() => {
       if (!focused.current) setText((value / 100).toString());
@@ -40,13 +54,13 @@ export const BpsInput = React.forwardRef<HTMLInputElement, BpsInputProps>(
             const raw = event.target.value;
             setText(raw);
             const parsed = Number(raw);
-            if (raw !== "" && !Number.isNaN(parsed)) onChange(Math.round(parsed * 100));
+            if (raw !== "" && !Number.isNaN(parsed)) onChange(clamp(Math.round(parsed * 100)));
           }}
           onBlur={() => {
             focused.current = false;
-            const parsed = Number(text) || 0;
-            setText(parsed.toString());
-            onChange(Math.round(parsed * 100));
+            const clamped = clamp(Math.round((Number(text) || 0) * 100));
+            setText((clamped / 100).toString());
+            onChange(clamped);
           }}
           {...props}
         />
