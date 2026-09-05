@@ -20,6 +20,7 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/features/auth/auth-context";
 import { LiveIndicator } from "@/components/layout/live-indicator";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { NavLinks } from "@/components/layout/nav-links";
 import { navItems, type NavItem } from "@/components/layout/nav-items";
 
@@ -75,8 +76,9 @@ export function Header() {
         </span>
       )}
 
-      <div className="ml-auto flex items-center gap-4">
+      <div className="ml-auto flex items-center gap-3">
         <LiveIndicator />
+        <NotificationBell />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">

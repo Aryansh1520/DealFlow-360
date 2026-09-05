@@ -38,7 +38,7 @@ import { formatBps } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/api-client";
 import { useIdempotencyKey } from "@/lib/api/idempotency";
-import { useInvalidateOnFrame, useLiveEvents } from "@/lib/live/use-live-events";
+import { useLiveEvents } from "@/lib/live/use-live-events";
 import type { PortalQuotationRead } from "@/lib/api/types";
 import {
   usePortalComment,
@@ -72,14 +72,28 @@ export function NegotiationScreen({ quotationId }: { quotationId: number }) {
     isRefetching,
   } = usePortalQuotation(quotationId);
 
-  const invalidate = useInvalidateOnFrame();
-  const [flash, setFlash] = React.useState<string | null>(null);
+  // Live changes from the rep are *queued*, not applied under the customer's
+  // feet — the totals shouldn't jump around mid-read. Each rep/system frame
+  // bumps a counter; the customer chooses when to pull them in. Frames for the
+  // customer's own actions (`quote.customer_*`, plus the status hop those cause)
+  // are ignored: `muteLive()` is called from every portal mutation's onSuccess.
+  const [pendingUpdates, setPendingUpdates] = React.useState(0);
+  const mutedUntilRef = React.useRef(0);
+  const muteLive = React.useCallback(() => {
+    mutedUntilRef.current = Date.now() + 5000;
+  }, []);
+
   const { connected } = useLiveEvents(`quote:${quotationId}`, (frame) => {
     if (frame.event_type === "heartbeat") return;
-    setFlash("Your rep just made a change — updating…");
-    window.setTimeout(() => setFlash(null), 2500);
-    invalidate(frame);
+    if (frame.event_type.startsWith("quote.customer_")) return;
+    if (Date.now() < mutedUntilRef.current) return;
+    setPendingUpdates((n) => n + 1);
   });
+
+  const applyUpdates = React.useCallback(() => {
+    setPendingUpdates(0);
+    refetch();
+  }, [refetch]);
 
   if (isLoading) return <Skeleton className="h-[32rem] w-full" />;
   if (isError || !quote) {
@@ -113,7 +127,7 @@ export function NegotiationScreen({ quotationId }: { quotationId: number }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => refetch()}
+            onClick={applyUpdates}
             disabled={isRefetching}
             title="Reload the latest version of this quotation"
           >
@@ -131,20 +145,35 @@ export function NegotiationScreen({ quotationId }: { quotationId: number }) {
         </p>
       </div>
 
-      {flash && (
+      {pendingUpdates > 0 && (
         <Alert>
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <AlertDescription>{flash}</AlertDescription>
+          <RefreshCw className="h-4 w-4" />
+          <AlertTitle>
+            {pendingUpdates === 1
+              ? "Your rep updated this quotation"
+              : `${pendingUpdates} updates from your rep`}
+          </AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>Review the latest terms whenever you&apos;re ready.</span>
+            <Button size="sm" onClick={applyUpdates} disabled={isRefetching}>
+              {isRefetching ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Show {pendingUpdates === 1 ? "update" : "updates"}
+            </Button>
+          </AlertDescription>
         </Alert>
       )}
 
       <ReEnteredApprovalNotice quote={quote} />
 
-      <LineTable quote={quote} />
+      <LineTable quote={quote} muteLive={muteLive} />
 
       <div className="grid items-stretch gap-6 md:grid-cols-2">
-        <ConfirmCard quote={quote} />
-        <CounterCard quote={quote} />
+        <ConfirmCard quote={quote} muteLive={muteLive} />
+        <CounterCard quote={quote} muteLive={muteLive} />
       </div>
 
       <TimelineCard quote={quote} />
@@ -154,7 +183,13 @@ export function NegotiationScreen({ quotationId }: { quotationId: number }) {
 
 /* ------------------------------------------------------------------ line table */
 
-function LineTable({ quote }: { quote: PortalQuotationRead }) {
+function LineTable({
+  quote,
+  muteLive,
+}: {
+  quote: PortalQuotationRead;
+  muteLive: () => void;
+}) {
   const [commentFor, setCommentFor] = React.useState<number | null>(null);
 
   return (
@@ -212,6 +247,7 @@ function LineTable({ quote }: { quote: PortalQuotationRead }) {
                         <LineComposer
                           quoteId={quote.id}
                           lineId={line.id}
+                          muteLive={muteLive}
                           onDone={() => setCommentFor(null)}
                         />
                       </TableCell>
@@ -262,10 +298,12 @@ function Row({
 function LineComposer({
   quoteId,
   lineId,
+  muteLive,
   onDone,
 }: {
   quoteId: number;
   lineId: number;
+  muteLive: () => void;
   onDone: () => void;
 }) {
   const [body, setBody] = React.useState("");
@@ -276,6 +314,7 @@ function LineComposer({
       onSubmit={(e) => {
         e.preventDefault();
         if (!body.trim()) return;
+        muteLive();
         comment.mutate({ line_id: lineId, body }, { onSuccess: onDone });
       }}
     >
@@ -319,7 +358,13 @@ function counterClosedReason(status: string): string {
   }
 }
 
-function CounterCard({ quote }: { quote: PortalQuotationRead }) {
+function CounterCard({
+  quote,
+  muteLive,
+}: {
+  quote: PortalQuotationRead;
+  muteLive: () => void;
+}) {
   const [bps, setBps] = React.useState(0);
   const [message, setMessage] = React.useState("");
   const [sent, setSent] = React.useState(false);
@@ -377,6 +422,7 @@ function CounterCard({ quote }: { quote: PortalQuotationRead }) {
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
+            muteLive();
             counter.mutate(
               { requested_discount_bps: bps, message: message || null },
               {
@@ -420,7 +466,13 @@ function CounterCard({ quote }: { quote: PortalQuotationRead }) {
 
 /* --------------------------------------------------------------- confirm card */
 
-function ConfirmCard({ quote }: { quote: PortalQuotationRead }) {
+function ConfirmCard({
+  quote,
+  muteLive,
+}: {
+  quote: PortalQuotationRead;
+  muteLive: () => void;
+}) {
   const [dialogSeq, setDialogSeq] = React.useState(0);
   const idempotencyKey = useIdempotencyKey(`portal-confirm-${quote.id}-${dialogSeq}`);
   const confirm = usePortalConfirm(quote.id);
@@ -484,6 +536,7 @@ function ConfirmCard({ quote }: { quote: PortalQuotationRead }) {
           disabled={!quote.can_confirm || confirm.isPending}
           onClick={() => {
             setDialogSeq((n) => n + 1);
+            muteLive();
             confirm.mutate(
               { expectedVersion: quote.version, idempotencyKey },
               {

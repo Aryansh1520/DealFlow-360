@@ -157,6 +157,11 @@ export function useInvalidateOnFrame(): (frame: StreamFrame) => void {
         queryClient.invalidateQueries({ queryKey: ["fulfillment", frame.quotation_id], ...opts });
         queryClient.invalidateQueries({ queryKey: ["billing", frame.quotation_id], ...opts });
       }
+      // Keep whichever list is currently on screen fresh (the internal quotations
+      // list / pipeline, or the customer's portal list) without forcing a refetch
+      // of every cached detail.
+      queryClient.invalidateQueries({ queryKey: ["quotations"], refetchType: "active" });
+      queryClient.invalidateQueries({ queryKey: ["portal", "quotations"], refetchType: "active" });
       if (frame.scope === "approvals") {
         queryClient.invalidateQueries({ queryKey: ["approvals"] });
       }

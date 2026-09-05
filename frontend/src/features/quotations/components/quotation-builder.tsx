@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Radio, RefreshCw, Send } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -46,6 +47,7 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
   } = useQuotation(quotationId);
   const allowedTransitions = useAllowedTransitions(quotation?.status);
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   // Live: the customer's portal actions (comment, counter, confirm) land here
   // without a refresh — the two-window demo money shot.
@@ -160,10 +162,13 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
   };
 
   // Errors already toast via each mutation's `onError` — swallow here so the
-  // dialog doesn't produce an unhandled rejection on top of that.
+  // dialog doesn't produce an unhandled rejection on top of that. On success the
+  // rep is dropped back on the quotations list: the quote is now the approver's
+  // to move, and any later change surfaces through the header notification bell.
   const handleSubmit = () =>
     submit
       .mutateAsync({ expectedVersion: quotation.version, idempotencyKey: submitIdemKey })
+      .then(() => router.push("/workspace/quotations"))
       .catch(() => {});
 
   const handleCancel = () =>
