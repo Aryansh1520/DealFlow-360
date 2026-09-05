@@ -1,82 +1,110 @@
 """Invoice / credit-note PDF rendering. The bytes are handed straight to MinIO by
-`app/billing/service.py` — they are never written to the local filesystem and are
-only ever served back through an authenticated endpoint."""
+`app/billing/service.py` — never written to the local filesystem, and only served
+back through an authenticated endpoint."""
 
 from __future__ import annotations
 
 import io
 
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
 from app.billing.models import Invoice
 from app.core.money import format_minor
 
+# All positions in points. A4 portrait is 595 x 842pt.
+PAGE_W, PAGE_H = A4
+MARGIN = 36
+# Right-edge x for each column (numbers are right-aligned to these).
+COL_QTY = 300
+COL_UNIT = 395
+COL_TAX = 475
+COL_AMOUNT = PAGE_W - MARGIN  # 559
+BODY_TOP = PAGE_H - 150
+ROW_H = 16
+BOTTOM = 56
+ROW_FONT = 8.5
+
+
+def _money(value: int, currency: str) -> str:
+    return format_minor(value, currency)
+
 
 def render_invoice_pdf(invoice: Invoice, *, customer_name: str, org_name: str) -> bytes:
-    buffer = io.BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-    left = 20 * mm
-    y = height - 25 * mm
+    buf = io.BytesIO()
+    pdf = canvas.Canvas(buf, pagesize=A4)
 
+    # ---- Header ------------------------------------------------------------------
     heading = "CREDIT NOTE" if invoice.document_type == "credit_note" else "INVOICE"
-    pdf.setFont("Helvetica-Bold", 18)
-    pdf.drawString(left, y, f"{heading}  {invoice.number}")
-    y -= 8 * mm
-    pdf.setFont("Helvetica", 10)
-    pdf.drawString(left, y, org_name)
-    y -= 5 * mm
-    pdf.drawString(left, y, f"Bill to: {customer_name}")
-    y -= 5 * mm
-    pdf.drawString(left, y, f"Status: {invoice.status}")
-    if invoice.issued_at:
-        y -= 5 * mm
-        pdf.drawString(left, y, f"Issued: {invoice.issued_at.date().isoformat()}")
-    if invoice.supersedes_invoice_id:
-        y -= 5 * mm
-        pdf.drawString(left, y, f"Supersedes invoice #{invoice.supersedes_invoice_id}")
+    pdf.setFont("Helvetica-Bold", 20)
+    pdf.drawString(MARGIN, PAGE_H - 60, heading)
+    pdf.setFont("Helvetica", 12)
+    pdf.drawString(MARGIN, PAGE_H - 78, invoice.number)
 
-    y -= 12 * mm
-    pdf.setFont("Helvetica-Bold", 9)
-    pdf.drawString(left, y, "Description")
-    pdf.drawString(left + 95 * mm, y, "Qty")
-    pdf.drawString(left + 110 * mm, y, "Unit")
-    pdf.drawString(left + 135 * mm, y, "Tax")
-    pdf.drawString(left + 160 * mm, y, "Amount")
-    y -= 3 * mm
-    pdf.line(left, y, width - left, y)
-    y -= 6 * mm
-
+    pdf.setFont("Helvetica-Bold", 10)
+    pdf.drawRightString(PAGE_W - MARGIN, PAGE_H - 55, org_name)
     pdf.setFont("Helvetica", 9)
-    for line in invoice.lines:
-        if y < 40 * mm:
-            pdf.showPage()
-            pdf.setFont("Helvetica", 9)
-            y = height - 25 * mm
-        pdf.drawString(left, y, line.description[:55])
-        pdf.drawRightString(left + 105 * mm, y, str(line.quantity))
-        pdf.drawRightString(left + 130 * mm, y, format_minor(line.unit_price_minor, invoice.currency))
-        pdf.drawRightString(left + 155 * mm, y, format_minor(line.tax_minor, invoice.currency))
-        pdf.drawRightString(width - left, y, format_minor(line.amount_minor, invoice.currency))
-        y -= 6 * mm
+    meta_lines = [f"Bill to: {customer_name}", f"Status: {invoice.status}"]
+    if invoice.issued_at:
+        meta_lines.append(f"Issued: {invoice.issued_at.date().isoformat()}")
+    if invoice.supersedes_invoice_id:
+        meta_lines.append(f"Supersedes invoice #{invoice.supersedes_invoice_id}")
+    y = PAGE_H - 72
+    for line in meta_lines:
+        pdf.drawRightString(PAGE_W - MARGIN, y, line)
+        y -= 12
 
-    y -= 4 * mm
-    pdf.line(left + 120 * mm, y, width - left, y)
-    y -= 7 * mm
-    pdf.setFont("Helvetica", 10)
-    for label, value in (
-        ("Subtotal", invoice.subtotal_minor),
-        ("Tax", invoice.tax_minor),
-        ("Total", invoice.total_minor),
-        ("Paid", invoice.paid_minor),
-        ("Balance", invoice.balance_minor),
-    ):
-        pdf.drawString(left + 120 * mm, y, label)
-        pdf.drawRightString(width - left, y, format_minor(value, invoice.currency))
-        y -= 6 * mm
+    # ---- Column headers -------------------------------------------------------
+    y = BODY_TOP
+    pdf.setFont("Helvetica-Bold", 9)
+    pdf.drawString(MARGIN, y, "Description")
+    pdf.drawRightString(COL_QTY, y, "Qty")
+    pdf.drawRightString(COL_UNIT, y, "Unit price")
+    pdf.drawRightString(COL_TAX, y, "Tax")
+    pdf.drawRightString(COL_AMOUNT, y, "Amount")
+    y -= 6
+    pdf.setLineWidth(0.75)
+    pdf.line(MARGIN, y, PAGE_W - MARGIN, y)
+    y -= ROW_H
+
+    # ---- Line rows ----------------------------------------------------------
+    pdf.setFont("Helvetica", ROW_FONT)
+    for line in invoice.lines:
+        if y < BOTTOM + 90:
+            pdf.showPage()
+            pdf.setFont("Helvetica", ROW_FONT)
+            y = PAGE_H - MARGIN
+        desc = line.description
+        if len(desc) > 60:
+            desc = desc[:59] + "…"
+        pdf.drawString(MARGIN, y, desc)
+        pdf.drawRightString(COL_QTY, y, str(line.quantity))
+        pdf.drawRightString(COL_UNIT, y, _money(line.unit_price_minor, invoice.currency))
+        pdf.drawRightString(COL_TAX, y, _money(line.tax_minor, invoice.currency))
+        pdf.drawRightString(COL_AMOUNT, y, _money(line.amount_minor, invoice.currency))
+        y -= ROW_H
+
+    # ---- Totals -----------------------------------------------------------
+    y -= 6
+    label_x = COL_TAX
+    pdf.line(label_x - 40, y, PAGE_W - MARGIN, y)
+    y -= ROW_H
+    rows = [
+        ("Subtotal", invoice.subtotal_minor, False),
+        ("Tax", invoice.tax_minor, False),
+        ("Total", invoice.total_minor, True),
+        ("Paid", invoice.paid_minor, False),
+        ("Balance due", invoice.balance_minor, True),
+    ]
+    for label, value, bold in rows:
+        pdf.setFont("Helvetica-Bold" if bold else "Helvetica", 10)
+        pdf.drawRightString(label_x, y, label)
+        pdf.drawRightString(COL_AMOUNT, y, _money(value, invoice.currency))
+        y -= ROW_H
+
+    pdf.setFont("Helvetica-Oblique", 7)
+    pdf.drawString(MARGIN, BOTTOM - 10, f"Generated by DealFlow360 · {invoice.number}")
 
     pdf.showPage()
     pdf.save()
-    return buffer.getvalue()
+    return buf.getvalue()

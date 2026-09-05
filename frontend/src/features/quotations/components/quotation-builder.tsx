@@ -37,6 +37,11 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
   const { data: quotation, isLoading, isError, error } = useQuotation(quotationId);
   const allowedTransitions = useAllowedTransitions(quotation?.status);
 
+  // Live: the customer's portal actions (comment, counter, confirm) land here
+  // without a refresh — the two-window demo money shot.
+  const invalidateOnFrame = useInvalidateOnFrame();
+  useLiveEvents(`quote:${quotationId}`, invalidateOnFrame);
+
   const [editorState, dispatch] = React.useReducer(
     editorReducer,
     quotation ? quotationToEditorState(quotation) : { lines: [], orderDiscountBps: 0 }
@@ -220,6 +225,8 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
 
   return (
     <div className="space-y-4">
+      <QuotationTabs quotationId={quotationId} />
+
       {!editable && quotation.status.startsWith("pending_") && (
         <Alert>
           <AlertTitle>Awaiting approval</AlertTitle>

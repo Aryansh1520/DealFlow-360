@@ -100,14 +100,14 @@ def get_invoice_lineage(invoice_id: int, current_user: CurrentUser, db: DbSessio
 
 @router.get("/{invoice_id}/pdf", dependencies=[BillingRead])
 def download_invoice_pdf(invoice_id: int, current_user: CurrentUser, db: DbSession) -> Response:
-    """Streams the rendered PDF straight out of MinIO — never off local disk, and
-    only after this `billing:read` check has passed."""
+    """Renders the invoice fresh and refreshes the MinIO copy, then streams it —
+    never off local disk, and only after this `billing:read` check has passed.
+    The PDF is a rendering of immutable data, so re-rendering is safe and keeps the
+    template current without a migration."""
     invoice = service.get_invoice_or_404(db, invoice_id)
-    if not invoice.pdf_object_key:
-        # Lazily render if the object went missing (e.g. storage was down at issue time).
-        service._render_and_store_pdf(db, invoice)
-        db.commit()
-    data = get_object_bytes(invoice.pdf_object_key)
+    service._render_and_store_pdf(db, invoice)
+    db.commit()
+    data = get_object_bytes(invoice.pdf_object_key) if invoice.pdf_object_key else b""
     return Response(
         content=data,
         media_type="application/pdf",

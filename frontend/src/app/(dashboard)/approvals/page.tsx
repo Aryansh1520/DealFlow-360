@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { useInvalidateOnFrame, useLiveEvents } from "@/lib/live/use-live-events";
 import { useAuth } from "@/features/auth/auth-context";
 import { useEnums } from "@/features/meta/hooks";
 import { ApprovalQueueTable } from "@/features/approvals/components/approval-queue-table";
@@ -8,6 +9,11 @@ import { ApprovalQueueTable } from "@/features/approvals/components/approval-que
 export default function ApprovalsPage() {
   const { hasPermission } = useAuth();
   const { data: enums } = useEnums();
+
+  // Live: a quote that re-enters approval (customer countered + confirmed, or a
+  // golden-rule re-route) shows up here with no refresh.
+  const invalidateOnFrame = useInvalidateOnFrame();
+  useLiveEvents("approvals", invalidateOnFrame);
   // A user might hold l1, l2, both (admin) or neither — show only the levels
   // they can act on rather than a level filter dropdown.
   const levels = [

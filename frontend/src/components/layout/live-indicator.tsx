@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { useInvalidateOnFrame, useLiveEvents } from "@/lib/live/use-live-events";
+import { useAuth } from "@/features/auth/auth-context";
 
 /**
  * The header's live dot. Subscribes to the org-wide `dashboard` channel so the
@@ -10,8 +11,13 @@ import { useInvalidateOnFrame, useLiveEvents } from "@/lib/live/use-live-events"
  * back to green on reconnect — judges notice the dot.
  */
 export function LiveIndicator({ className }: { className?: string }) {
+  const { hasPermission } = useAuth();
   const invalidate = useInvalidateOnFrame();
-  const { connected } = useLiveEvents("dashboard", invalidate);
+  // The `dashboard` bus scope requires `dashboard:read` server-side.
+  const scope = hasPermission("dashboard:read") ? "dashboard" : null;
+  const { connected } = useLiveEvents(scope, invalidate);
+
+  if (!scope) return null;
 
   return (
     <span

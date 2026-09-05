@@ -50,8 +50,16 @@ apiClient.interceptors.request.use((config) => {
 });
 
 // Unwrap the {success, message, data} envelope so callers just deal with `data`.
+// Binary responses (PDF / XLSX exports via `responseType: "blob"`) are passed
+// through untouched — there is no JSON envelope to unwrap.
 apiClient.interceptors.response.use((response) => {
-  response.data = (response.data as Envelope<unknown>).data;
+  const isBinary =
+    response.config.responseType === "blob" ||
+    response.config.responseType === "arraybuffer" ||
+    typeof Blob !== "undefined" && response.data instanceof Blob;
+  if (!isBinary) {
+    response.data = (response.data as Envelope<unknown>).data;
+  }
   return response;
 });
 
