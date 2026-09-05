@@ -172,7 +172,15 @@ def _build_computed_lines(
 
         cost_minor = line.quantity * line.cost_price_minor
         margin_minor = net_minor - cost_minor
-        margin_bps = 0 if net_minor == 0 else _floor_bps(margin_minor, net_minor)
+        if net_minor > 0:
+            margin_bps = _floor_bps(margin_minor, net_minor)
+        elif margin_minor < 0:
+            # Net revenue is zero (a total discount) but the goods cost money — this
+            # is below cost. Report -100% so Hard Gate 1 (`margin_bps < 0`) fires
+            # instead of being masked by the divide-by-zero guard.
+            margin_bps = -10000
+        else:
+            margin_bps = 0
 
         cat_ceiling = policy.category_ceilings.get(line.category_id, {})
         category_ceiling_bps = cat_ceiling.get("ceiling_bps", 0)
@@ -206,9 +214,20 @@ def _build_computed_lines(
             )
         )
 
+    # Revenue-weight each line. When a total discount collapses net revenue to zero,
+    # net-weighting would zero every weight and silently neuter the blended-overage,
+    # value and margin risk components — so fall back to gross-weighting, which is
+    # never zero for a real quote. (Hard Gate 1 still blocks a genuine below-cost
+    # deal regardless; this keeps the score meaningful for the near-total case.)
+    gross_total_for_weight = sum(cl.gross_minor for cl in computed)
     weighted: list[_ComputedLine] = []
     for cl in computed:
-        weight = (Decimal(cl.net_minor) / Decimal(net_total)) if net_total else Decimal(0)
+        if net_total > 0:
+            weight = Decimal(cl.net_minor) / Decimal(net_total)
+        elif gross_total_for_weight > 0:
+            weight = Decimal(cl.gross_minor) / Decimal(gross_total_for_weight)
+        else:
+            weight = Decimal(0)
         weighted.append(
             _ComputedLine(
                 **{**cl.__dict__, "weight": weight}
@@ -459,7 +478,13 @@ def evaluate(
         total_minor=net_total + tax_total_minor,
         cost_total_minor=cost_total_minor,
         margin_minor=margin_total_minor,
-        margin_bps=to_bps(margin_total_minor, net_total) if margin_total_minor >= 0 else _floor_bps(margin_total_minor, net_total),
+        margin_bps=(
+            to_bps(margin_total_minor, net_total)
+            if margin_total_minor >= 0 and net_total > 0
+            else _floor_bps(margin_total_minor, net_total)
+            if net_total > 0
+            else (-10000 if margin_total_minor < 0 else 0)
+        ),
         effective_discount_bps=to_bps(discount_total_minor, gross_minor) if gross_minor else 0,
         blended_overage_bps=blended_overage_bps,
         worst_overage_bps=worst_overage_bps,

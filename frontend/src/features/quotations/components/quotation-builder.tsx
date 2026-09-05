@@ -148,6 +148,7 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
   const canSend = allowedTransitions.includes("sent");
 
   const orderDiscountDirty = editorState.orderDiscountBps !== quotation.order_discount_bps;
+  const orderDiscountBlocked = computation?.trace.outcome === "blocked";
   const commitOrderDiscount = () => {
     if (editorState.orderDiscountBps === quotation.order_discount_bps) return;
     updateQuotation.mutate({
@@ -374,6 +375,11 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
                   />
                 </div>
               </div>
+              {orderDiscountBlocked && (
+                <p className="text-xs font-medium text-danger">
+                  This discount prices a line below cost — it can’t be applied. Lower it first.
+                </p>
+              )}
               {orderDiscountDirty && (
                 <div className="flex items-center justify-end gap-2">
                   <Button
@@ -388,7 +394,11 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
                   >
                     Reset
                   </Button>
-                  <Button size="sm" disabled={updateQuotation.isPending} onClick={commitOrderDiscount}>
+                  <Button
+                    size="sm"
+                    disabled={updateQuotation.isPending || orderDiscountBlocked}
+                    onClick={commitOrderDiscount}
+                  >
                     Apply order discount
                   </Button>
                 </div>

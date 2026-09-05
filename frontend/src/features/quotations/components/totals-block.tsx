@@ -147,13 +147,31 @@ function TotalsBody({
         </button>
       </div>
 
-      <ApprovalPreview requiredApprovals={computation.required_approvals} />
+      <ApprovalPreview
+        requiredApprovals={computation.required_approvals}
+        outcome={trace.outcome}
+      />
     </div>
   );
 }
 
-function ApprovalPreview({ requiredApprovals }: { requiredApprovals: string[] }) {
+function ApprovalPreview({
+  requiredApprovals,
+  outcome,
+}: {
+  requiredApprovals: string[];
+  outcome: QuoteComputation["trace"]["outcome"];
+}) {
   const { data: enums } = useEnums();
+
+  if (outcome === "blocked") {
+    return (
+      <div className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
+        Blocked — a line is priced below cost. This can’t be submitted; adjust the
+        discount first.
+      </div>
+    );
+  }
 
   if (requiredApprovals.length === 0) {
     return (
