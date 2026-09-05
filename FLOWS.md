@@ -18,6 +18,18 @@ Frontend: http://localhost:3001 · Backend: http://localhost:8001/api/v1
 If containers are already running, your edits are picked up live (both `frontend` and
 `backend` mount the source directory and hot-reload).
 
+**One-time step if you already had this stack running before today**: the frontend
+image gained a new dev dependency (`openapi-typescript`, used by the auto-sync below).
+Docker Compose reuses the anonymous `node_modules` volume across recreates, so an
+existing environment's volume won't have it and the schema auto-sync will silently no-op
+(falls back to the existing `schema.d.ts` — it won't crash, but won't sync either). Fix it
+once with:
+```bash
+docker compose up -d --force-recreate -V frontend
+```
+`-V` recreates anonymous volumes from the image instead of carrying over the old ones. Not
+needed on a fresh clone.
+
 ### Seeded logins (password `demo12345` unless noted)
 
 | Role | Email | What they should see |
@@ -31,18 +43,38 @@ If containers are already running, your edits are picked up live (both `frontend
 
 ---
 
-## 1. Codegen pipeline (Task 0)
+## 1. Codegen pipeline (Task 0) — now automatic, no manual step needed
 
+Type sync no longer relies on anyone remembering to run a script:
+
+- **Every `docker compose up`**: the frontend container waits for the backend's
+  `/health` to respond, then regenerates `schema.d.ts` from the backend's *live*
+  `/api/v1/openapi.json` before starting `next dev` (`frontend/docker-entrypoint.sh`).
+  This is also what fixed the `v1.0.0` vs `v1.1.0` contract-mismatch banner — the real
+  bug was `contract_version` hardcoded to `v1.0.0` in `backend/app/config/settings.py`;
+  it's now `v1.1.0`, matching `API_CONTRACT.md`.
+- **Every image build** (`docker compose build` / `up --build`, dev or
+  `APP_ENV=production`): the backend Dockerfile bakes a fresh `openapi.json` into its
+  own image at build time (pure schema introspection — no DB, no running server). The
+  frontend Dockerfile then pulls that *exact* file straight out of the backend build via
+  Compose's `additional_contexts: backend-schema: service:backend` and regenerates
+  `schema.d.ts` from it before `yarn build` runs. So a production image always ships
+  types that match whatever backend it was built alongside — no dependency on a
+  possibly-stale committed file, and no live backend needed at build time (matches the
+  "never fetch the schema at runtime in production" rule).
+- **Manual regeneration** (still available, e.g. for a plain non-Docker `yarn dev`):
+  ```bash
+  cd frontend
+  yarn gen:api          # hits a live backend at :8001
+  # or
+  yarn gen:api:file     # reads the committed ../backend/openapi.json
+  ```
+
+Verify the sync is holding:
 ```bash
-cd frontend
-yarn gen:api          # hits the live backend at :8001
-# or
-yarn gen:api:file     # reads the committed ../backend/openapi.json
+yarn check:api   # regenerates from ../backend/openapi.json and diffs — should exit 0
 ```
-
-Both should regenerate `src/lib/api/schema.d.ts` with **no diff** if the backend hasn't
-changed — that's `yarn check:api` (run it; it should exit 0 right after a fresh generate).
-If it fails, someone changed a backend schema without bumping `API_CONTRACT.md`.
+If it fails, someone changed a backend schema without bumping `API_CONTRACT.md`'s version.
 
 ```bash
 yarn check:money   # should exit 0 — no `_minor` field divided outside money.ts / money-input.tsx

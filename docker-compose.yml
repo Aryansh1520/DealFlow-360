@@ -67,6 +67,12 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   worker:
     build:
@@ -94,6 +100,12 @@ services:
   frontend:
     build:
       context: ./frontend
+      # Lets the frontend image's build stage pull /app/openapi.json straight out
+      # of the backend image via `COPY --from=backend-schema` — always the exact
+      # schema the backend build just produced, never a possibly-stale committed
+      # file. Requires Docker Compose v2.17+ / BuildKit (bake).
+      additional_contexts:
+        backend-schema: "service:backend"
       args:
         APP_ENV: ${APP_ENV:-development}
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001/api/v1}
@@ -102,6 +114,10 @@ services:
       APP_ENV: ${APP_ENV:-development}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001/api/v1}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Hackathon Starter}
+      # Container-network address, used only server-side by docker-entrypoint.sh
+      # to regenerate schema.d.ts against the live backend in dev — never
+      # bundled into the browser build (no NEXT_PUBLIC_ prefix).
+      INTERNAL_API_URL: http://backend:8001/api/v1
     ports:
       - "3001:3001"
     volumes:
@@ -109,7 +125,8 @@ services:
       - /app/node_modules
       - /app/.next
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   pgdata:

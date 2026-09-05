@@ -15,9 +15,18 @@ RUN yarn install --frozen-lockfile 2>/dev/null || yarn install
 
 COPY . .
 
+# Pull the backend's exact openapi.json straight out of its image (see
+# docker-compose.yml's `additional_contexts: backend-schema: service:backend`)
+# and regenerate schema.d.ts from it — the image always ships types that match
+# whatever backend build it was assembled alongside, never a possibly-stale
+# committed file. `--from=backend-schema` requires BuildKit; `docker compose
+# build`/`up` enable it automatically.
+COPY --from=backend-schema /app/openapi.json ./backend-openapi.json
+RUN yarn openapi-typescript ./backend-openapi.json -o src/lib/api/schema.d.ts
+
 # NEXT_PUBLIC_* values are baked into the bundle at build time
 RUN if [ "$APP_ENV" = "production" ]; then yarn build; fi
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "if [ \"$APP_ENV\" = \"production\" ]; then yarn start; else yarn dev; fi"]
+CMD ["sh", "/app/docker-entrypoint.sh"]
