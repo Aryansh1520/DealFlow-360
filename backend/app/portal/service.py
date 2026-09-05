@@ -27,6 +27,12 @@ from app.quotations.transitions import transition
 
 _NEGOTIABLE = {QuoteStatus.SENT.value, QuoteStatus.UNDER_NEGOTIATION.value}
 _CONFIRMABLE = _NEGOTIABLE | {QuoteStatus.APPROVED.value}
+# The customer can comment on / counter a quote that is `sent`, already
+# `under_negotiation`, or `approved` (they can still push for a better price
+# right up until they confirm). Any of these coming from a non-negotiation
+# status flips the quote to `under_negotiation` so the rep picks it back up.
+_COUNTERABLE = _NEGOTIABLE | {QuoteStatus.APPROVED.value}
+_REOPENS_NEGOTIATION = {QuoteStatus.SENT.value, QuoteStatus.APPROVED.value}
 
 # Statuses a quotation is still purely internal in — the customer should not see
 # these in the portal even for their own `customer_id`. Everything else (approved
@@ -95,7 +101,7 @@ def add_comment(
     db: Session, quotation_id: int, principal: Principal, payload: PortalCommentRequest
 ) -> PortalQuotationRead:
     quotation = _load_or_404(db, quotation_id, principal)
-    if quotation.status not in _NEGOTIABLE:
+    if quotation.status not in _COUNTERABLE:
         raise ConflictException(
             "This quotation is not open for comments.", code=ErrorCode.ILLEGAL_TRANSITION
         )
@@ -107,7 +113,7 @@ def add_comment(
         summary=f"{quotation.customer.name} commented: \"{payload.body[:180]}\"",
         payload={"line_id": payload.line_id, "body": payload.body},
     )
-    if quotation.status == QuoteStatus.SENT.value:
+    if quotation.status in _REOPENS_NEGOTIATION:
         transition(
             db,
             quotation,
@@ -124,10 +130,11 @@ def counter_offer(
     db: Session, quotation_id: int, principal: Principal, payload: PortalCounterRequest
 ) -> PortalQuotationRead:
     quotation = _load_or_404(db, quotation_id, principal)
-    if quotation.status not in _NEGOTIABLE:
+    if quotation.status not in _COUNTERABLE:
         raise ConflictException(
             "This quotation is not open for a counter-offer.", code=ErrorCode.ILLEGAL_TRANSITION
         )
+    note = (payload.message or "").strip()
     record_event(
         db,
         quotation,
@@ -136,8 +143,9 @@ def counter_offer(
         summary=(
             f"{quotation.customer.name} asked for a discount of "
             f"{payload.requested_discount_bps / 100:.1f}%"
-            + (f" on one line" if payload.line_id else "")
+            + (" on one line" if payload.line_id else "")
             + "."
+            + (f' Note: "{note}"' if note else "")
         ),
         payload={
             "requested_discount_bps": payload.requested_discount_bps,
@@ -145,7 +153,7 @@ def counter_offer(
             "message": payload.message,
         },
     )
-    if quotation.status == QuoteStatus.SENT.value:
+    if quotation.status in _REOPENS_NEGOTIATION:
         transition(
             db,
             quotation,

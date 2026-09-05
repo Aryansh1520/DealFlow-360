@@ -2,7 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Loader2, MessageSquarePlus, Radio, Send } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+  MessageSquarePlus,
+  Radio,
+  RefreshCw,
+  Send,
+} from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -11,6 +19,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -54,7 +63,14 @@ const STATUS_COPY: Record<string, { label: string; tone: string }> = {
 };
 
 export function NegotiationScreen({ quotationId }: { quotationId: number }) {
-  const { data: quote, isLoading, isError, error } = usePortalQuotation(quotationId);
+  const {
+    data: quote,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isRefetching,
+  } = usePortalQuotation(quotationId);
 
   const invalidate = useInvalidateOnFrame();
   const [flash, setFlash] = React.useState<string | null>(null);
@@ -86,13 +102,25 @@ export function NegotiationScreen({ quotationId }: { quotationId: number }) {
         >
           <ArrowLeft className="h-4 w-4" /> All quotations
         </Link>
-        <span
-          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-          title={connected ? "Live — changes appear automatically" : "Reconnecting…"}
-        >
-          <Radio className={cn("h-3.5 w-3.5", connected ? "text-positive" : "text-muted-foreground/40")} />
-          {connected ? "Live" : "Offline"}
-        </span>
+        <div className="flex items-center gap-3">
+          <span
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+            title={connected ? "Live — changes appear automatically" : "Reconnecting…"}
+          >
+            <Radio className={cn("h-3.5 w-3.5", connected ? "text-positive" : "text-muted-foreground/40")} />
+            {connected ? "Live" : "Offline"}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isRefetching}
+            title="Reload the latest version of this quotation"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isRefetching && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div>
@@ -114,9 +142,9 @@ export function NegotiationScreen({ quotationId }: { quotationId: number }) {
 
       <LineTable quote={quote} />
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <CounterCard quote={quote} />
+      <div className="grid items-stretch gap-6 md:grid-cols-2">
         <ConfirmCard quote={quote} />
+        <CounterCard quote={quote} />
       </div>
 
       <TimelineCard quote={quote} />
@@ -269,22 +297,82 @@ function LineComposer({
 
 /* --------------------------------------------------------------- counter card */
 
+/** Customer-friendly reason the counter form is closed — shown only when
+ * `can_counter` is false (i.e. status is outside the backend's `_COUNTERABLE`
+ * set: sent / under_negotiation / approved). */
+function counterClosedReason(status: string): string {
+  switch (status) {
+    case "pending_l1":
+    case "pending_l2":
+      return "Your rep is reviewing the last request. We'll update this page as soon as there's news.";
+    case "confirmed":
+    case "fulfilling":
+    case "invoiced":
+    case "paid":
+      return "This quotation is confirmed — there's nothing left to negotiate.";
+    case "expired":
+      return "This quotation has expired — ask your rep for a fresh one to negotiate on.";
+    case "cancelled":
+      return "This quotation was cancelled.";
+    default:
+      return "This quotation isn't open for a counter-offer yet.";
+  }
+}
+
 function CounterCard({ quote }: { quote: PortalQuotationRead }) {
   const [bps, setBps] = React.useState(0);
   const [message, setMessage] = React.useState("");
+  const [sent, setSent] = React.useState(false);
   const counter = usePortalCounter(quote.id);
 
-  if (!quote.can_counter) return <div className="hidden md:block" />;
+  // Always render a same-size peer of "Ready to go ahead?" — when negotiation
+  // isn't open, the card explains why instead of disappearing.
+  if (!quote.can_counter) {
+    return (
+      <Card className="flex h-full flex-col">
+        <CardHeader>
+          <CardTitle className="text-lg">Want to negotiate?</CardTitle>
+          <CardDescription>Send your rep a counter-offer.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-1 items-center">
+          <p className="text-sm text-muted-foreground">{counterClosedReason(quote.status)}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (sent) {
+    return (
+      <Card className="flex h-full flex-col">
+        <CardHeader>
+          <CardTitle className="text-lg">Counter-offer sent</CardTitle>
+          <CardDescription>It&apos;s with your rep now.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-1 items-center">
+          <p className="text-sm text-muted-foreground">
+            Your rep will review the discount you asked for and respond here. Nothing on this
+            quotation changes until they accept it.
+          </p>
+        </CardContent>
+        <CardFooter>
+          <Button variant="ghost" className="w-full" onClick={() => setSent(false)}>
+            Send another
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  }
 
   return (
-    <Card>
+    <Card className="flex h-full flex-col">
       <CardHeader>
-        <CardTitle className="text-lg">Request a better price</CardTitle>
+        <CardTitle className="text-lg">Want to negotiate?</CardTitle>
         <CardDescription>
-          Ask for an overall discount. Your rep reviews it — it isn&apos;t applied automatically.
+          Send your rep a counter-offer. It goes back to them for review — nothing changes
+          until they accept it.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1">
         <form
           className="space-y-3"
           onSubmit={(e) => {
@@ -295,13 +383,16 @@ function CounterCard({ quote }: { quote: PortalQuotationRead }) {
                 onSuccess: () => {
                   setBps(0);
                   setMessage("");
+                  setSent(true);
                 },
               }
             );
           }}
         >
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Requested discount</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              Overall discount you&apos;re asking for
+            </label>
             <BpsInput value={bps} onChange={setBps} />
           </div>
           <div className="space-y-1.5">
@@ -312,9 +403,14 @@ function CounterCard({ quote }: { quote: PortalQuotationRead }) {
               onChange={(e) => setMessage(e.target.value)}
             />
           </div>
-          <Button type="submit" variant="secondary" disabled={counter.isPending || bps <= 0}>
+          <Button
+            type="submit"
+            variant="secondary"
+            className="w-full"
+            disabled={counter.isPending || bps <= 0}
+          >
             {counter.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            Submit request
+            Send counter-offer
           </Button>
         </form>
       </CardContent>
@@ -375,14 +471,14 @@ function ConfirmCard({ quote }: { quote: PortalQuotationRead }) {
         : "Your rep is still preparing this quotation — you'll be able to confirm once it's sent to you.";
 
   return (
-    <Card>
+    <Card className="flex h-full flex-col">
       <CardHeader>
         <CardTitle className="text-lg">Ready to go ahead?</CardTitle>
         <CardDescription>
           Confirming accepts the quotation on its current terms.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-1 flex-col justify-center">
         <Button
           className="w-full"
           disabled={!quote.can_confirm || confirm.isPending}

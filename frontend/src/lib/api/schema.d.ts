@@ -1024,8 +1024,10 @@ export interface paths {
         };
         /**
          * Download Invoice Pdf
-         * @description Streams the rendered PDF straight out of MinIO — never off local disk, and
-         *     only after this `billing:read` check has passed.
+         * @description Renders the invoice fresh and refreshes the MinIO copy, then streams it —
+         *     never off local disk, and only after this `billing:read` check has passed.
+         *     The PDF is a rendering of immutable data, so re-rendering is safe and keeps the
+         *     template current without a migration.
          */
         get: operations["download_invoice_pdf_api_v1_invoices__invoice_id__pdf_get"];
         put?: never;

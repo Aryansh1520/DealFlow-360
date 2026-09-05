@@ -143,10 +143,19 @@ export function useInvalidateOnFrame(): (frame: StreamFrame) => void {
     (frame: StreamFrame) => {
       if (frame.event_type === "heartbeat") return;
       if (frame.quotation_id != null) {
-        queryClient.invalidateQueries({ queryKey: ["quotations", frame.quotation_id] });
-        queryClient.invalidateQueries({ queryKey: ["portal", "quotation", frame.quotation_id] });
-        queryClient.invalidateQueries({ queryKey: ["fulfillment", frame.quotation_id] });
-        queryClient.invalidateQueries({ queryKey: ["billing", frame.quotation_id] });
+        // `refetchType: "all"` — re-pull even queries with no mounted observer
+        // right now (a background tab, a collapsed panel). Without it the global
+        // `staleTime` can leave a stale render on screen until the next window
+        // focus. These keys are all scoped to one quotation, so the extra
+        // fetches are cheap and bounded.
+        const opts = { refetchType: "all" as const };
+        queryClient.invalidateQueries({ queryKey: ["quotations", frame.quotation_id], ...opts });
+        queryClient.invalidateQueries({
+          queryKey: ["portal", "quotation", frame.quotation_id],
+          ...opts,
+        });
+        queryClient.invalidateQueries({ queryKey: ["fulfillment", frame.quotation_id], ...opts });
+        queryClient.invalidateQueries({ queryKey: ["billing", frame.quotation_id], ...opts });
       }
       if (frame.scope === "approvals") {
         queryClient.invalidateQueries({ queryKey: ["approvals"] });

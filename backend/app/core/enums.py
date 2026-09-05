@@ -242,7 +242,15 @@ QUOTE_TRANSITIONS: dict[str, list[str]] = {
     # `approved -> confirmed`: a customer who already asked to confirm and then had
     # their terms re-approved shouldn't have to wait for a manual re-send; a rep
     # can also confirm straight from approved on the customer's behalf.
-    QuoteStatus.APPROVED: [QuoteStatus.SENT, QuoteStatus.CONFIRMED, QuoteStatus.CANCELLED],
+    # `approved -> under_negotiation`: the customer can still open a counter-offer
+    # from the portal before confirming — that reopens negotiation and the rep
+    # re-submits once the terms are agreed.
+    QuoteStatus.APPROVED: [
+        QuoteStatus.SENT,
+        QuoteStatus.UNDER_NEGOTIATION,
+        QuoteStatus.CONFIRMED,
+        QuoteStatus.CANCELLED,
+    ],
     QuoteStatus.SENT: [
         QuoteStatus.UNDER_NEGOTIATION,
         QuoteStatus.CONFIRMED,

@@ -41,6 +41,9 @@ _NEGOTIABLE = {QuoteStatus.SENT.value, QuoteStatus.UNDER_NEGOTIATION.value}
 # A re-approved quote (customer countered → re-routed → approved) is confirmable
 # again without a manual re-send.
 _CONFIRMABLE = _NEGOTIABLE | {QuoteStatus.APPROVED.value}
+# The customer can still open a counter-offer from an `approved` quote — right up
+# until they confirm. Keep this in step with `portal.service._COUNTERABLE`.
+_COUNTERABLE = _NEGOTIABLE | {QuoteStatus.APPROVED.value}
 
 
 def _actor_label(event: QuoteEvent, customer_name: str) -> str:
@@ -105,5 +108,5 @@ def to_portal_quotation_read(db: Session, quotation: Quotation) -> PortalQuotati
         totals=totals,
         timeline=timeline,
         can_confirm=quotation.status in _CONFIRMABLE,
-        can_counter=quotation.status in _NEGOTIABLE,
+        can_counter=quotation.status in _COUNTERABLE,
     )

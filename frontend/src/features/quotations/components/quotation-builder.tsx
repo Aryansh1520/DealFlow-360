@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Send } from "lucide-react";
+import { Radio, RefreshCw, Send } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Money } from "@/components/ui/money";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { cn } from "@/lib/utils";
 import { getErrorMessage } from "@/lib/api-client";
 import { useIdempotencyKey } from "@/lib/api/idempotency";
 import { useInvalidateOnFrame, useLiveEvents } from "@/lib/live/use-live-events";
@@ -35,13 +37,26 @@ import {
 import { useQuotePreview } from "@/features/quotations/use-preview";
 
 export function QuotationBuilder({ quotationId }: { quotationId: number }) {
-  const { data: quotation, isLoading, isError, error } = useQuotation(quotationId);
+  const {
+    data: quotation,
+    isLoading,
+    isError,
+    error,
+    isRefetching,
+  } = useQuotation(quotationId);
   const allowedTransitions = useAllowedTransitions(quotation?.status);
+  const queryClient = useQueryClient();
 
   // Live: the customer's portal actions (comment, counter, confirm) land here
   // without a refresh — the two-window demo money shot.
   const invalidateOnFrame = useInvalidateOnFrame();
-  useLiveEvents(`quote:${quotationId}`, invalidateOnFrame);
+  const { connected: live } = useLiveEvents(`quote:${quotationId}`, invalidateOnFrame);
+
+  // Manual escape hatch — one click re-pulls the quote, its timeline, the
+  // suggestions and the decision trace (all keyed under ["quotations", id]).
+  const handleRefresh = React.useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["quotations", quotationId] });
+  }, [queryClient, quotationId]);
 
   const [editorState, dispatch] = React.useReducer(
     editorReducer,
@@ -226,6 +241,26 @@ export function QuotationBuilder({ quotationId }: { quotationId: number }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end gap-3">
+        <span
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+          title={live ? "Live — customer actions appear automatically" : "Reconnecting…"}
+        >
+          <Radio className={cn("h-3.5 w-3.5", live ? "text-positive" : "text-muted-foreground/40")} />
+          {live ? "Live" : "Offline"}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={isRefetching}
+          title="Reload the latest version of this quotation"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", isRefetching && "animate-spin")} />
+          Refresh
+        </Button>
+      </div>
+
       <QuotationTabs quotationId={quotationId} />
 
       <CounterRequestBanner quotation={quotation} />
