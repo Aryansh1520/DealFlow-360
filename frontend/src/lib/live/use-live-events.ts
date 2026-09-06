@@ -22,6 +22,155 @@ const BACKOFF_START = 1000;
 const BACKOFF_CAP = 15000;
 const HEARTBEAT_TIMEOUT = 60000;
 
+/**
+ * One live `fetch` SSE stream per scope, shared by every `useLiveEvents` consumer.
+ *
+ * A browser allows only ~6 concurrent connections per origin over HTTP/1.1, and an
+ * SSE stream holds its slot for the whole session. Without sharing, each mounted
+ * hook (header live dot, notification bell, a quote page, …) opened its own socket
+ * and normal REST calls queued for tens of seconds behind them. Now N hooks on the
+ * same scope cost exactly one socket; the stream tears down when the last consumer
+ * unmounts.
+ */
+type FrameListener = (frame: StreamFrame) => void;
+type StatusListener = (connected: boolean) => void;
+
+interface ScopeChannel {
+  frameListeners: Set<FrameListener>;
+  statusListeners: Set<StatusListener>;
+  connected: boolean;
+  stopped: boolean;
+  controller: AbortController | null;
+  backoff: number;
+  reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
+}
+
+const channels = new Map<string, ScopeChannel>();
+
+function openChannel(scope: string): ScopeChannel {
+  const channel: ScopeChannel = {
+    frameListeners: new Set(),
+    statusListeners: new Set(),
+    connected: false,
+    stopped: false,
+    controller: null,
+    backoff: BACKOFF_START,
+    reconnectTimer: undefined,
+    heartbeatTimer: undefined,
+  };
+  channels.set(scope, channel);
+
+  const setStatus = (value: boolean) => {
+    channel.connected = value;
+    for (const listener of channel.statusListeners) listener(value);
+  };
+
+  const armHeartbeatWatchdog = () => {
+    if (channel.heartbeatTimer) clearTimeout(channel.heartbeatTimer);
+    channel.heartbeatTimer = setTimeout(() => {
+      // Silence too long — force a reconnect.
+      channel.controller?.abort();
+    }, HEARTBEAT_TIMEOUT);
+  };
+
+  const scheduleReconnect = () => {
+    if (channel.stopped) return;
+    const jittered = channel.backoff * (0.7 + Math.random() * 0.6);
+    channel.reconnectTimer = setTimeout(connect, jittered);
+    channel.backoff = Math.min(channel.backoff * 2, BACKOFF_CAP);
+  };
+
+  const connect = async () => {
+    if (channel.stopped) return;
+    channel.controller = new AbortController();
+    const token = tokenStorage.getAccess();
+    if (!token) {
+      scheduleReconnect();
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/events/stream?scope=${encodeURIComponent(scope)}`,
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
+          signal: channel.controller.signal,
+        }
+      );
+      if (!response.ok || !response.body) {
+        throw new Error(`stream ${response.status}`);
+      }
+
+      setStatus(true);
+      armHeartbeatWatchdog();
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (!channel.stopped) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Frames are separated by a blank line.
+        let sep: number;
+        while ((sep = buffer.indexOf("\n\n")) !== -1) {
+          const raw = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          const dataLine = raw.split("\n").find((line) => line.startsWith("data:"));
+          if (!dataLine) continue;
+          try {
+            const frame = JSON.parse(dataLine.slice(5).trim()) as StreamFrame;
+            channel.backoff = BACKOFF_START; // a live frame resets the backoff
+            armHeartbeatWatchdog();
+            if (frame.event_type !== "heartbeat") {
+              for (const listener of channel.frameListeners) listener(frame);
+            }
+          } catch {
+            /* ignore a partial / malformed frame */
+          }
+        }
+      }
+      throw new Error("stream ended");
+    } catch {
+      if (channel.stopped) return;
+      setStatus(false);
+      scheduleReconnect();
+    }
+  };
+
+  connect();
+  return channel;
+}
+
+function acquireChannel(
+  scope: string,
+  onFrame: FrameListener,
+  onStatus: StatusListener
+): ScopeChannel {
+  const channel = channels.get(scope) ?? openChannel(scope);
+  channel.frameListeners.add(onFrame);
+  channel.statusListeners.add(onStatus);
+  return channel;
+}
+
+function releaseChannel(scope: string, onFrame: FrameListener, onStatus: StatusListener): void {
+  const channel = channels.get(scope);
+  if (!channel) return;
+  channel.frameListeners.delete(onFrame);
+  channel.statusListeners.delete(onStatus);
+  if (channel.frameListeners.size > 0 || channel.statusListeners.size > 0) return;
+
+  // Last consumer gone — tear the stream down.
+  channel.stopped = true;
+  channel.controller?.abort();
+  if (channel.reconnectTimer) clearTimeout(channel.reconnectTimer);
+  if (channel.heartbeatTimer) clearTimeout(channel.heartbeatTimer);
+  channels.delete(scope);
+}
+
 export function useLiveEvents(
   scope: string | null,
   onFrame?: (frame: StreamFrame) => void
@@ -32,101 +181,20 @@ export function useLiveEvents(
   onFrameRef.current = onFrame;
 
   React.useEffect(() => {
-    if (!scope || !isAuthenticated) return;
-
-    let stopped = false;
-    let controller: AbortController | null = null;
-    let backoff = BACKOFF_START;
-    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
-    let heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
-
-    const armHeartbeatWatchdog = () => {
-      if (heartbeatTimer) clearTimeout(heartbeatTimer);
-      heartbeatTimer = setTimeout(() => {
-        // Silence too long — force a reconnect.
-        controller?.abort();
-      }, HEARTBEAT_TIMEOUT);
-    };
-
-    const scheduleReconnect = () => {
-      if (stopped) return;
-      const jittered = backoff * (0.7 + Math.random() * 0.6);
-      reconnectTimer = setTimeout(connect, jittered);
-      backoff = Math.min(backoff * 2, BACKOFF_CAP);
-    };
-
-    const connect = async () => {
-      if (stopped) return;
-      controller = new AbortController();
-      const token = tokenStorage.getAccess();
-      if (!token) {
-        scheduleReconnect();
-        return;
-      }
-
-      try {
-        const response = await fetch(
-          `${API_URL}/events/stream?scope=${encodeURIComponent(scope)}`,
-          {
-            headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
-            signal: controller.signal,
-          }
-        );
-        if (!response.ok || !response.body) {
-          throw new Error(`stream ${response.status}`);
-        }
-
-        setConnected(true);
-        armHeartbeatWatchdog();
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (!stopped) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-
-          // Frames are separated by a blank line.
-          let sep: number;
-          while ((sep = buffer.indexOf("\n\n")) !== -1) {
-            const raw = buffer.slice(0, sep);
-            buffer = buffer.slice(sep + 2);
-            const dataLine = raw
-              .split("\n")
-              .find((line) => line.startsWith("data:"));
-            if (!dataLine) continue;
-            try {
-              const frame = JSON.parse(dataLine.slice(5).trim()) as StreamFrame;
-              backoff = BACKOFF_START; // a live frame resets the backoff
-              armHeartbeatWatchdog();
-              if (frame.event_type !== "heartbeat") {
-                onFrameRef.current?.(frame);
-              }
-            } catch {
-              /* ignore a partial / malformed frame */
-            }
-          }
-        }
-        throw new Error("stream ended");
-      } catch (err) {
-        if (stopped) return;
-        setConnected(false);
-        scheduleReconnect();
-      }
-    };
-
-    connect();
-
-    return () => {
-      stopped = true;
-      controller?.abort();
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (heartbeatTimer) clearTimeout(heartbeatTimer);
+    if (!scope || !isAuthenticated) {
       setConnected(false);
-    };
-    // Reconnect from scratch when the scope or the principal changes.
+      return;
+    }
+
+    const frameListener: FrameListener = (frame) => onFrameRef.current?.(frame);
+    const statusListener: StatusListener = (value) => setConnected(value);
+
+    const channel = acquireChannel(scope, frameListener, statusListener);
+    setConnected(channel.connected);
+
+    return () => releaseChannel(scope, frameListener, statusListener);
+    // Re-acquire when the scope or the principal changes (a new token is read on
+    // the next (re)connect).
   }, [scope, isAuthenticated, userType]);
 
   return { connected };

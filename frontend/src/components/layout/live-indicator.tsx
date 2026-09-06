@@ -13,8 +13,15 @@ import { useAuth } from "@/features/auth/auth-context";
 export function LiveIndicator({ className }: { className?: string }) {
   const { hasPermission } = useAuth();
   const invalidate = useInvalidateOnFrame();
-  // The `dashboard` bus scope requires `dashboard:read` server-side.
-  const scope = hasPermission("dashboard:read") ? "dashboard" : null;
+  // Every ledger event is published to both the `approvals` and `dashboard` bus
+  // scopes, so prefer `approvals` when we can — that's the scope the notification
+  // bell already holds, and `useLiveEvents` shares one socket per scope. Falling
+  // back to `dashboard` keeps the dot working for a dashboard-only viewer.
+  const scope = hasPermission("quotations:read")
+    ? "approvals"
+    : hasPermission("dashboard:read")
+      ? "dashboard"
+      : null;
   const { connected } = useLiveEvents(scope, invalidate);
 
   if (!scope) return null;

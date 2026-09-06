@@ -4,7 +4,7 @@ import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import type { StreamFrame } from "@/lib/api/types";
-import { useLiveEvents } from "@/lib/live/use-live-events";
+import { useInvalidateOnFrame, useLiveEvents } from "@/lib/live/use-live-events";
 import { useAuth } from "@/features/auth/auth-context";
 
 export interface LiveNotification {
@@ -55,7 +55,13 @@ export function useLiveNotifications() {
 
   const scope = hasPermission("quotations:read") ? "approvals" : null;
 
+  // This is the only `approvals` stream open for most of the app, so it also runs
+  // the contract §4.11 cache invalidation (the approvals page relies on it).
+  const invalidateOnFrame = useInvalidateOnFrame();
+
   const { connected } = useLiveEvents(scope, (frame: StreamFrame) => {
+    invalidateOnFrame(frame);
+
     const make = NOTIFY[frame.event_type];
     if (!make) return;
 

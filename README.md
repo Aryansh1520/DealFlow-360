@@ -1,56 +1,92 @@
-# Full-Stack Hackathon Starter
+# DealFlow360
 
-A reusable, domain-agnostic starter for building CRUD/business applications fast. Bring your own problem statement — the plumbing is done.
+A deal engine that governs itself. Instead of a plain "quote → invoice" form, DealFlow360
+turns a quotation into a governed workflow:
 
-**Stack:** Next.js (App Router) · TypeScript · Tailwind CSS · shadcn/ui · TanStack Query · React Hook Form — FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL · Pydantic v2 · JWT
+- **Explainable approval routing** — a quote is risk-scored line by line against a
+  versioned discount policy, and the engine decides *who* must approve and shows the
+  approver *why* (which ceiling was hit, how far over, how much of the order it is).
+- **Live negotiation** — a customer portal where the customer can counter-offer; the rep's
+  builder updates over SSE with no refresh, and re-applying terms re-runs the engine and
+  can push the quote back into approval on its own.
+- **Real fulfilment** — multi-warehouse stock splits, backorders and replenishment under
+  concurrent load, with optimistic-concurrency conflict handling.
+- **Hybrid billing** — one-time and recurring (subscription) lines on the same order,
+  invoices/credit notes rendered to PDF, partial and full payments.
+- **Policy as data** — catalogue, price lists and discount policy are editable in the admin
+  UI as new versions you activate or roll back, no redeploy.
+- **Deal-health dashboard** — stalled deals, discount anomalies that explain themselves,
+  delivery slippage; role-shaped dashboard layouts.
 
-## What's included
+Multi-tenant: every user, role, customer and configuration row belongs to one organization,
+and a principal only ever sees its own org's data.
 
-**Backend**
-- JWT authentication (access + refresh tokens) — register, login, refresh, me
-- User management CRUD
-- Role-based access control — roles hold permission strings (e.g. `users:read`); `*` grants everything
-- Generic CRUD base (`CRUDBase`) with pagination, filtering, sorting and search
-- Centralized env-driven configuration (`app/config/settings.py`)
-- Structured logging + request logging
-- Global exception handling (consistent `{"detail": ...}` errors)
-- Alembic migrations + idempotent seeding (default roles + admin user)
+## Stack
 
-**Frontend**
-- Auth context with session restore, login/register/logout
-- Axios API client with automatic token refresh on 401
-- Route guards: `AuthGuard`, `GuestGuard`, `PermissionGuard`
-- Dashboard shell (responsive sidebar + header + user menu)
-- Users management page (search, pagination, create/edit/delete dialogs) — a template for every list screen you'll build
-- shadcn/ui components, loading skeletons, toast-based error handling
+**Frontend** — Next.js (App Router) · TypeScript · Tailwind · shadcn/ui · TanStack Query ·
+React Hook Form
+**Backend** — FastAPI · SQLAlchemy 2 · Alembic · Pydantic v2 · PostgreSQL · Dramatiq
+(Redis) workers · MinIO (S3-compatible object storage) · JWT auth + RBAC
 
-## Quick start
+`context/API_CONTRACT.md` is the single source of truth for the wire format; the frontend
+types are generated from the backend's OpenAPI schema at build time.
+
+## Run it with Docker
+
+Requires Docker with Compose v2 (BuildKit — the default in recent Docker).
 
 ```bash
-cp .env.example .env   # adjust values if needed
+cp .env.example .env    # local dev values, adjust if you like
 docker compose up --build
 ```
 
-- Frontend: http://localhost:3001
-- API: http://localhost:8001/api/v1
-- API docs: http://localhost:8001/api/v1/docs
-- Default admin: `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env` (admin@example.com / admin12345)
+On first start the backend runs migrations, seeds default roles + the admin user, and
+regenerates `openapi.json`. Once the containers report healthy:
 
-Set `APP_ENV=production` in `.env` to build/run production images with the same compose file.
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3001 |
+| API | http://localhost:8001/api/v1 |
+| API docs (Swagger) | http://localhost:8001/api/v1/docs |
+| MinIO console | http://localhost:9001 (`minioadmin` / `minioadmin`) |
+| Postgres | `localhost:5432` (`postgres` / `postgres`, db `app`) |
+| Redis | `localhost:6379` |
 
-### Running without Docker
+Default admin login: `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env`
+(`admin@example.com` / `admin12345`).
 
-Backend (requires a running PostgreSQL matching `DATABASE_URL`):
+Source directories are bind-mounted, so both frontend and backend hot-reload on edit.
+
+### Seeding demo data
+
+```bash
+# default seed (roles + admin) runs automatically on startup
+docker compose exec backend python -m app.db.seed
+
+# full demo dataset (org, customers, catalogue, history)
+docker compose exec backend python -m app.db.seed --reset --history --demo
+```
+
+### Production images
+
+Set `APP_ENV=production` in `.env` and re-run `docker compose up --build` — the same
+compose file builds and runs production images (`next build`, `uvicorn --workers 4`).
+
+## Run it without Docker
+
+Backend needs a running Postgres, Redis and MinIO matching the `*_URL` / `MINIO_*` values
+in `.env`.
 
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
-python -m app.main
+python -m app.db.seed
+uvicorn app.main:app --reload --port 8001
+# separate shell — background worker:
+dramatiq app.worker.tasks
 ```
-
-Frontend:
 
 ```bash
 cd frontend
@@ -58,64 +94,55 @@ yarn install
 yarn dev
 ```
 
-## Project structure
+## Folder structure
 
 ```
-├── frontend/
-│   └── src/
-│       ├── app/                  # Routes: (auth) group, (dashboard) group
-│       ├── components/
-│       │   ├── ui/               # shadcn/ui components
-│       │   └── layout/           # Sidebar, header, nav config
-│       ├── features/
-│       │   ├── auth/             # Context, guards, forms, API
-│       │   └── users/            # Users CRUD: API, hooks, table, dialogs
-│       └── lib/                  # Axios client, config, utils, types
+.
+├── docker-compose.yml         # db · redis · minio · backend · worker · frontend
+├── .env.example               # every config value (see .env for local dev)
+├── context/                   # design docs — API_CONTRACT.md is the wire spec
+├── demo/selenium/             # Selenium scripts that drive the app end-to-end
+│
 ├── backend/
-│   ├── alembic/                  # Migrations
+│   ├── Dockerfile
+│   ├── docker-entrypoint.sh   # migrate → seed → regen openapi → serve
+│   ├── alembic/               # migrations
 │   └── app/
-│       ├── config/               # settings.py (env-driven), logging.py
-│       ├── core/                 # security, deps, crud base, pagination,
-│       │                         # exceptions, middleware
-│       ├── db/                   # base, session, seed
-│       ├── auth/  users/  roles/ # Feature modules (models, schemas, router)
-│       ├── api.py                # Router aggregation
-│       └── main.py               # App factory
-├── docker-compose.yml
-└── .env.example
+│       ├── main.py            # app factory
+│       ├── api.py             # router aggregation
+│       ├── config/            # env-driven settings, logging
+│       ├── core/              # security, deps, CRUD base, pagination, middleware
+│       ├── db/                # base, session, seed
+│       ├── auth/  users/  roles/  organizations/    # identity & RBAC, multi-tenant
+│       ├── customers/  portal/                      # customers + customer-facing portal
+│       ├── catalog/  pricing/  policies/  subscriptions/  # configuration (policy as data)
+│       ├── quotations/  approvals/  affinity/       # the deal engine + upsell
+│       ├── fulfillment/  warehouses/                # stock, splits, backorders
+│       ├── billing/                                 # invoices, credit notes, payments
+│       ├── dashboard/  events/  meta/               # dashboards, SSE events, enum source
+│       ├── jobs/  worker/                           # scheduled jobs + Dramatiq tasks
+│
+└── frontend/
+    ├── Dockerfile
+    └── src/
+        ├── app/
+        │   ├── (auth)/         # login / register
+        │   ├── (dashboard)/    # staff app: dashboard, config, customers, quotations,
+        │   │                   # approvals, reports, roles, users, workspace
+        │   └── (portal)/       # customer portal
+        ├── components/
+        │   ├── ui/             # shadcn/ui
+        │   └── layout/         # sidebar, header, nav, live indicator
+        ├── features/           # one folder per domain: api + hooks + components
+        │                       # (auth, quotations, approvals, billing, pricing, …)
+        └── lib/
+            ├── api/            # axios client + generated schema.d.ts
+            └── live/           # SSE hooks
 ```
 
-## Adding a new entity (the hackathon workflow)
+## The Contract Lock Rule
 
-Example: adding `projects`.
-
-**Backend**
-
-1. `app/projects/models.py` — SQLAlchemy model (use `Base`, `TimestampMixin`).
-2. `app/projects/schemas.py` — `ProjectCreate`, `ProjectUpdate`, `ProjectRead` (with `from_attributes=True`).
-3. `app/projects/router.py` — copy `app/roles/router.py`, swap model/schemas, set permissions (`projects:read` / `projects:write`). `CRUDBase(Project, search_fields=[...])` gives you list/get/create/update/delete with pagination, search, sorting and filtering for free.
-4. Register the router in `app/api.py`.
-5. Import the models module in `alembic/env.py`, then:
-   ```bash
-   alembic revision --autogenerate -m "add projects"
-   alembic upgrade head
-   ```
-6. Grant the new permissions to roles (via the roles API or seed).
-
-**Frontend**
-
-1. `src/features/projects/api.ts` + `hooks.ts` — copy from `src/features/users/`.
-2. Components: copy `users-table.tsx` / `user-form-dialog.tsx` and adapt columns/fields.
-3. Add the page under `src/app/(dashboard)/projects/page.tsx`.
-4. Add a nav item in `src/components/layout/nav-items.ts` (with its permission).
-
-## RBAC
-
-- Roles carry a list of permission strings; `*` = full access.
-- Seeded roles: `admin` (`*`) and `user` (none) — the default for self-registered users.
-- Backend: guard endpoints with `Depends(require_permissions("thing:read"))`.
-- Frontend: `<PermissionGuard permissions={["thing:read"]}>` or `hasPermission()` from `useAuth()`.
-
-## Configuration
-
-Everything is environment-driven — see `.env.example` for the full list. Backend settings are validated in `backend/app/config/settings.py`; frontend values come from `NEXT_PUBLIC_*` variables (baked in at build time for production images).
+`context/API_CONTRACT.md` is the single source of truth for every byte that crosses the
+network. Don't invent, rename, or retype any field, endpoint, enum member or error code
+defined there. If a change is genuinely needed: stop, edit that file, bump the contract
+version, regenerate OpenAPI + types (`yarn gen:api`), then resume.

@@ -12,9 +12,10 @@ the manual trigger endpoint stays.
 from __future__ import annotations
 
 import logging
+import zlib
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config.settings import settings
@@ -106,23 +107,44 @@ _SCHEDULE_MINUTES = {
 }
 
 
+def _advisory_key(name: str) -> int:
+    """Stable 63-bit key per job name for a Postgres advisory lock."""
+    return (0x5346 << 32) | zlib.crc32(name.encode())
+
+
 def run_job(name: str) -> dict:
     """Run one job across every organization. Used by the scheduler tick and by
-    `POST /admin/jobs/{name}/run`."""
+    `POST /admin/jobs/{name}/run`.
+
+    The app starts a `BackgroundScheduler` in *every* `uvicorn --workers N` process
+    (APScheduler is in-process only, with no cross-process coordination), so each
+    tick fires this N times at once — duplicate work plus racing writes (e.g. the
+    `product_affinity` rebuild tripping a `UniqueViolation`). A Postgres advisory
+    lock keyed on the job name lets exactly one caller run it; the rest skip."""
     if name not in JOBS:
         raise KeyError(name)
     fn = JOBS[name]
     per_org: dict[int, object] = {}
+    now = datetime.now(timezone.utc).isoformat()
     with SessionLocal() as db:
-        orgs = db.scalars(select(Organization).where(Organization.is_active.is_(True))).all()
-        for org in orgs:
-            set_current_org(db, org.id)
-            try:
-                per_org[org.id] = fn(db)
-            except Exception:
-                logger.exception("job %s failed for org %s", name, org.id)
-                db.rollback()
-                per_org[org.id] = "error"
+        key = _advisory_key(name)
+        if not db.scalar(select(func.pg_try_advisory_lock(key))):
+            logger.info("job %s already running elsewhere — skipped", name)
+            return {"job": name, "ran_at": now, "per_org": {}, "skipped": True}
+        try:
+            orgs = db.scalars(select(Organization).where(Organization.is_active.is_(True))).all()
+            for org in orgs:
+                org_id = org.id
+                set_current_org(db, org_id)
+                try:
+                    per_org[org_id] = fn(db)
+                except Exception:
+                    db.rollback()
+                    logger.exception("job %s failed for org %s", name, org_id)
+                    per_org[org_id] = "error"
+        finally:
+            db.rollback()
+            db.scalar(select(func.pg_advisory_unlock(key)))
     return {"job": name, "ran_at": datetime.now(timezone.utc).isoformat(), "per_org": per_org}
 
 

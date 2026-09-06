@@ -11,9 +11,12 @@ export default function ApprovalsPage() {
   const { data: enums } = useEnums();
 
   // Live: a quote that re-enters approval (customer countered + confirmed, or a
-  // golden-rule re-route) shows up here with no refresh.
+  // golden-rule re-route) shows up here with no refresh. The header's notification
+  // bell already holds an `approvals` SSE stream and runs this same invalidation
+  // for anyone with `quotations:read`; only open a second stream when it doesn't,
+  // so we don't burn one of the browser's 6 per-origin connections needlessly.
   const invalidateOnFrame = useInvalidateOnFrame();
-  useLiveEvents("approvals", invalidateOnFrame);
+  useLiveEvents(hasPermission("quotations:read") ? null : "approvals", invalidateOnFrame);
   // A user might hold l1, l2, both (admin) or neither — show only the levels
   // they can act on rather than a level filter dropdown.
   const levels = [
