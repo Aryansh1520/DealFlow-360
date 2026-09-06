@@ -175,7 +175,6 @@ def click_text(driver: WebDriver, text: str, *, timeout: int = DEFAULT_TIMEOUT) 
 def fill(el: WebElement, value: str) -> None:
     el.click()
     el.send_keys(Keys.CONTROL, "a")
-    el.send_keys(Keys.COMMAND, "a")
     el.send_keys(Keys.DELETE)
     el.send_keys(str(value))
 
