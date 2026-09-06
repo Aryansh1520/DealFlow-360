@@ -1,5 +1,6 @@
 """Password hashing and JWT token creation/validation."""
 
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
@@ -11,6 +12,7 @@ from app.core.exceptions import UnauthorizedException
 
 ACCESS_TOKEN = "access"
 REFRESH_TOKEN = "refresh"
+PASSWORD_RESET = "password_reset"
 
 # The two top-level identities in the system. Internal staff (sales rep, manager,
 # finance, admin, ...) are all `User` rows distinguished only by their `Role`'s
@@ -33,7 +35,11 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 def _create_token(
-    subject: str, token_type: str, user_type: UserType, expires_delta: timedelta
+    subject: str,
+    token_type: str,
+    user_type: UserType,
+    expires_delta: timedelta,
+    extra_claims: dict[str, Any] | None = None,
 ) -> str:
     now = datetime.now(timezone.utc)
     payload = {
@@ -43,6 +49,8 @@ def _create_token(
         "iat": now,
         "exp": now + expires_delta,
     }
+    if extra_claims:
+        payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
@@ -61,6 +69,25 @@ def create_refresh_token(subject_id: int, user_type: UserType) -> str:
         REFRESH_TOKEN,
         user_type,
         timedelta(days=settings.jwt_refresh_token_expire_days),
+    )
+
+
+def password_fingerprint(hashed_password: str) -> str:
+    """Short digest of the current password hash. Embedded in a reset token as its
+    `fp` claim so the token stops validating the moment the password changes —
+    single-use semantics without a DB table to track spent tokens."""
+    return hashlib.sha256(hashed_password.encode("utf-8")).hexdigest()[:16]
+
+
+def create_password_reset_token(
+    subject_id: int, user_type: UserType, hashed_password: str
+) -> str:
+    return _create_token(
+        str(subject_id),
+        PASSWORD_RESET,
+        user_type,
+        timedelta(minutes=settings.jwt_password_reset_token_expire_minutes),
+        extra_claims={"fp": password_fingerprint(hashed_password)},
     )
 
 

@@ -69,6 +69,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/forgot-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Forgot Password
+         * @description Issues a short-lived, single-use password-reset token for the account with
+         *     this email. Mirrors `login`: the address is looked up as an internal user
+         *     first, then as a portal-enabled customer.
+         *
+         *     There is no mail transport in this project, so the token is returned in the
+         *     response for the reset screen to use directly (and is also logged). The token
+         *     carries an `fp` claim — a digest of the current password hash — so it stops
+         *     working the moment the password is changed.
+         */
+        post: operations["forgot_password_api_v1_auth_forgot_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Password
+         * @description Consumes a token from `/auth/forgot-password` and sets a new password. The
+         *     token's `fp` claim must still match the account's current password hash, so a
+         *     token is good for exactly one reset and any others issued earlier are voided
+         *     by the same change.
+         */
+        post: operations["reset_password_api_v1_auth_reset_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me": {
         parameters: {
             query?: never;
@@ -1858,6 +1908,25 @@ export interface components {
             /** Line Id */
             line_id: number | null;
         };
+        /** ForgotPasswordRequest */
+        ForgotPasswordRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+        };
+        /**
+         * ForgotPasswordResponse
+         * @description This project has no mail transport, so the reset token is handed straight
+         *     back for the reset screen to use (and is also logged server-side).
+         */
+        ForgotPasswordResponse: {
+            /** Reset Token */
+            reset_token: string;
+            /** Expires In Minutes */
+            expires_in_minutes: number;
+        };
         /** FulfillmentAcceptRequest */
         FulfillmentAcceptRequest: {
             /** Expected Version */
@@ -3120,6 +3189,13 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** ResetPasswordRequest */
+        ResetPasswordRequest: {
+            /** Token */
+            token: string;
+            /** New Password */
+            new_password: string;
+        };
         /** RoleCreate */
         RoleCreate: {
             /** Name */
@@ -3379,6 +3455,20 @@ export interface components {
              */
             message: string;
             data: components["schemas"]["DecisionTrace"];
+        };
+        /** SuccessResponse[ForgotPasswordResponse] */
+        SuccessResponse_ForgotPasswordResponse_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            /**
+             * Message
+             * @default Success
+             */
+            message: string;
+            data: components["schemas"]["ForgotPasswordResponse"];
         };
         /** SuccessResponse[FulfillmentPlan] */
         SuccessResponse_FulfillmentPlan_: {
@@ -4361,6 +4451,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuccessResponse_TokenResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forgot_password_api_v1_auth_forgot_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_ForgotPasswordResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_password_api_v1_auth_reset_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse_NoneType_"];
                 };
             };
             /** @description Validation Error */

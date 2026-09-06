@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
@@ -5,25 +6,36 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.schemas import (
+    ForgotPasswordRequest,
+    ForgotPasswordResponse,
     LoginRequest,
     MeResponse,
     MeUpdate,
     RefreshRequest,
     RegisterRequest,
+    ResetPasswordRequest,
     TokenResponse,
 )
+from app.config.settings import settings
 from app.core.deps import CurrentPrincipal, CurrentUser
-from app.core.exceptions import ConflictException, UnauthorizedException
+from app.core.exceptions import (
+    ConflictException,
+    NotFoundException,
+    UnauthorizedException,
+)
 from app.core.responses import SuccessResponse, ok
 from app.core.security import (
     CUSTOMER,
     INTERNAL,
+    PASSWORD_RESET,
     REFRESH_TOKEN,
     UserType,
     create_access_token,
+    create_password_reset_token,
     create_refresh_token,
     decode_token,
     hash_password,
+    password_fingerprint,
     verify_password,
 )
 from app.core.tenant_context import set_current_org
@@ -36,6 +48,8 @@ from app.users.models import User
 from app.users.schemas import UserRead
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 DbSession = Annotated[Session, Depends(get_db)]
 
@@ -131,6 +145,87 @@ def refresh(payload: RefreshRequest, db: DbSession):
         return ok(_token_pair(customer.id, CUSTOMER), "Token refreshed successfully.")
 
     raise UnauthorizedException("Invalid token")
+
+
+@router.post(
+    "/forgot-password", response_model=SuccessResponse[ForgotPasswordResponse]
+)
+def forgot_password(payload: ForgotPasswordRequest, db: DbSession):
+    """Issues a short-lived, single-use password-reset token for the account with
+    this email. Mirrors `login`: the address is looked up as an internal user
+    first, then as a portal-enabled customer.
+
+    There is no mail transport in this project, so the token is returned in the
+    response for the reset screen to use directly (and is also logged). The token
+    carries an `fp` claim — a digest of the current password hash — so it stops
+    working the moment the password is changed."""
+    user = db.scalar(select(User).where(User.email == payload.email))
+    if user is not None and user.is_active:
+        subject_id, user_type, hashed = user.id, INTERNAL, user.hashed_password
+    else:
+        customer = db.scalar(
+            select(Customer).where(Customer.email == payload.email)
+        )
+        if customer is not None and customer.portal_enabled:
+            subject_id = customer.id
+            user_type = CUSTOMER
+            hashed = customer.hashed_password
+        else:
+            raise NotFoundException("No account was found for that email address")
+
+    token = create_password_reset_token(subject_id, user_type, hashed)
+    expires_in = settings.jwt_password_reset_token_expire_minutes
+    reset_url = f"{settings.frontend_url.rstrip('/')}/reset-password?token={token}"
+    logger.info(
+        "Password reset requested for %s (%s) — link valid %d min: %s",
+        payload.email,
+        user_type,
+        expires_in,
+        reset_url,
+    )
+    print(
+        f"\n{'=' * 78}\n"
+        f"  PASSWORD RESET  ·  {payload.email}\n"
+        f"  {reset_url}\n"
+        f"  (single-use · expires in {expires_in} min)\n"
+        f"{'=' * 78}\n",
+        flush=True,
+    )
+    return ok(
+        ForgotPasswordResponse(reset_token=token, expires_in_minutes=expires_in),
+        "If the account exists, a password reset token has been generated.",
+    )
+
+
+@router.post("/reset-password", response_model=SuccessResponse[None])
+def reset_password(payload: ResetPasswordRequest, db: DbSession):
+    """Consumes a token from `/auth/forgot-password` and sets a new password. The
+    token's `fp` claim must still match the account's current password hash, so a
+    token is good for exactly one reset and any others issued earlier are voided
+    by the same change."""
+    token_payload = decode_token(payload.token, expected_type=PASSWORD_RESET)
+    user_type = token_payload.get("user_type")
+    subject_id = int(token_payload["sub"])
+
+    if user_type == INTERNAL:
+        principal = db.get(User, subject_id)
+        if principal is None or not principal.is_active:
+            raise UnauthorizedException("Invalid or expired reset token")
+    elif user_type == CUSTOMER:
+        principal = db.get(Customer, subject_id)
+        if principal is None or not principal.portal_enabled:
+            raise UnauthorizedException("Invalid or expired reset token")
+    else:
+        raise UnauthorizedException("Invalid or expired reset token")
+
+    if token_payload.get("fp") != password_fingerprint(principal.hashed_password):
+        raise UnauthorizedException("This reset link has already been used")
+
+    principal.hashed_password = hash_password(payload.new_password)
+    db.add(principal)
+    db.commit()
+    logger.info("Password reset completed for %s %s", user_type, subject_id)
+    return ok(None, "Password reset successfully. You can now sign in.")
 
 
 @router.get("/me", response_model=SuccessResponse[MeResponse])

@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     api_prefix: str = "/api/v1"
     # Must equal the version at the top of context/API_CONTRACT.md — asserted on the
     # frontend at boot (`GET /meta/enums`).
-    contract_version: str = "v1.5.0"
+    contract_version: str = "v1.7.0"
     host: str = "0.0.0.0"
     port: int = 8001
 
@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
     jwt_refresh_token_expire_days: int = 7
+    jwt_password_reset_token_expire_minutes: int = 30
 
     # CORS (comma-separated origins)
     cors_origins: str = "http://localhost:3001"

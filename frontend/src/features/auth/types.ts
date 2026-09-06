@@ -66,3 +66,19 @@ export interface RegisterPayload {
   password: string;
   full_name: string;
 }
+
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+/** No mail transport in this project — the reset token comes straight back in
+ * the response for the reset screen to use (and is also logged server-side). */
+export interface ForgotPasswordResult {
+  reset_token: string;
+  expires_in_minutes: number;
+}
+
+export interface ResetPasswordPayload {
+  token: string;
+  new_password: string;
+}

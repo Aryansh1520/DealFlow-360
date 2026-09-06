@@ -26,6 +26,23 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ForgotPasswordResponse(BaseModel):
+    """This project has no mail transport, so the reset token is handed straight
+    back for the reset screen to use (and is also logged server-side)."""
+
+    reset_token: str
+    expires_in_minutes: int
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8, max_length=72)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str

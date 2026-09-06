@@ -28,28 +28,29 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { homePathFor, useAuth } from "@/features/auth/auth-context";
+import { authApi } from "@/features/auth/api";
 
-const loginSchema = z.object({
+const forgotPasswordSchema = z.object({
   email: z.string().email("Enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
 });
 
-type LoginValues = z.infer<typeof loginSchema>;
+type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 
-export function LoginForm() {
-  const { login } = useAuth();
+export function ForgotPasswordForm() {
   const router = useRouter();
 
-  const form = useForm<LoginValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "" },
+  const form = useForm<ForgotPasswordValues>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: "" },
   });
 
-  const onSubmit = async (values: LoginValues) => {
+  const onSubmit = async (values: ForgotPasswordValues) => {
     try {
-      const me = await login(values);
-      router.push(homePathFor(me.user_type));
+      // This project has no mail transport — the reset token comes straight back
+      // (and is also printed to the backend log). Carry it to the reset screen.
+      const { reset_token } = await authApi.forgotPassword(values);
+      toast.success("Reset link generated. Choose a new password below.");
+      router.push(`/reset-password?token=${encodeURIComponent(reset_token)}`);
     } catch (error) {
       toast.error(getErrorMessage(error));
     }
@@ -58,8 +59,11 @@ export function LoginForm() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Sign in</CardTitle>
-        <CardDescription>Enter your credentials to access your account.</CardDescription>
+        <CardTitle>Reset your password</CardTitle>
+        <CardDescription>
+          Enter the email for your account and we&apos;ll take you to a screen to set a
+          new password.
+        </CardDescription>
       </CardHeader>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -71,43 +75,30 @@ export function LoginForm() {
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="you@example.com" autoComplete="email" {...field} />
+                    <Input
+                      type="email"
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" autoComplete="current-password" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="text-right">
-              <Link
-                href="/forgot-password"
-                className="text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-              >
-                Forgot password?
-              </Link>
-            </div>
           </CardContent>
           <CardFooter className="flex-col gap-4">
             <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting && <Loader2 className="animate-spin" />}
-              Sign in
+              Continue
             </Button>
             <p className="text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
-              <Link href="/register" className="font-medium text-foreground underline-offset-4 hover:underline">
-                Sign up
+              Remembered it?{" "}
+              <Link
+                href="/login"
+                className="font-medium text-foreground underline-offset-4 hover:underline"
+              >
+                Back to sign in
               </Link>
             </p>
           </CardFooter>
