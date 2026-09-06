@@ -1,0 +1,4 @@
+# DealFlow360 demo automation — Python + Selenium.
+# Selenium 4 ships "Selenium Manager", which downloads a matching chromedriver
+# automatically, so the only hard dependency is a local Google Chrome install.
+selenium>=4.25,<5
